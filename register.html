@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Register</title>
+    <link rel="stylesheet" href="css/styles.css">
+  </head>
+
+  <body>
+    <header>
+      <div class="nav container">
+        <div class="logo"><a href="index.html">Vallotronics</a></div>
+        <div class="links">
+          <a href="login.html">Login</a>
+          <a href="products.html">Products</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <h2>Create Account</h2>
+
+      <div class="auth-card">
+        <form id="regForm">
+          <div class="form-row">
+            <input class="form-input" required id="name" placeholder="Full name">
+          </div>
+
+          <div class="form-row">
+            <input class="form-input" required type="email" id="email" placeholder="Email">
+          </div>
+
+          <div class="form-row">
+            <input class="form-input" required type="password" id="password" placeholder="Password">
+          </div>
+
+          <div class="form-row">
+            <button class="btn" type="submit">Register</button>
+          </div>
+        </form>
+      </div>
+    </main>
+
+    <script src="js/app.js"></script>
+    <script src="js/register.js"></script>
+  </body>
+</html>

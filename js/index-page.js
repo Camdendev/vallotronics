@@ -2,7 +2,8 @@ const f = document.getElementById('featured');
 
 PRODUCTS.slice(0, 4).forEach((p) => {
   const d = document.createElement('div');
-  d.className = 'card';
+  d.className = 'card clickable';
+  d.dataset.productId = p.id;
   d.innerHTML = `
     <img src="${p.image}">
     <h3>${p.name}</h3>
@@ -13,8 +14,7 @@ PRODUCTS.slice(0, 4).forEach((p) => {
     <p class="muted">${p.desc}</p>
     
     <p>
-      <a href="product.html?id=${p.id}" class="btn">View</a>
-      <button class="btn secondary" data-id="${p.id}">Add to Cart</button>
+      <button class="btn" data-id="${p.id}">Add to Cart</button>
     </p>
   `;
 
@@ -22,7 +22,10 @@ PRODUCTS.slice(0, 4).forEach((p) => {
 });
 
 document.getElementById('featured').addEventListener('click', (e) => {
-  if (e.target.dataset.id) app.addToCart(e.target.dataset.id);
-});
+  if (e.target.dataset.id) return app.addToCart(e.target.dataset.id);
 
-// Search removed from homepage
+  const card = e.target.closest('.card');
+  if (card && card.dataset.productId) {
+    window.location.href = `product.html?id=${card.dataset.productId}`;
+  }
+});

@@ -1,47 +1,49 @@
 <!doctype html>
 <html>
-  <head>
-    <header>
-      <div class="nav container">
-        <div class="logo"><a href="index.html">Vallotronics</a></div>
-        <div class="links"></div>
-      </div>
-    </header>
-    <title>Dashboard</title>
-    <link rel="stylesheet" href="css/styles.css">
-  </head>
 
-  <body>
-    <main class="container">
-      <h2 id="dashGreeting">Your Dashboard</h2>
+<head>
+  <header>
+    <div class="nav container">
+      <div class="logo"><a href="index.html">Vallotronics</a></div>
+      <div class="links"></div>
+    </div>
+  </header>
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
 
-      <div class="two-column dashboard-layout">
-        <aside class="card" style="padding:16px;max-width:360px">
-          <h3>Profile</h3>
-          <div id="profile"></div>
-          <div id="adminOptions" style="margin-top:12px"></div>
+<body>
+  <main class="container">
+    <h2 id="dashGreeting">Your Dashboard</h2>
 
-          <div id="adminPanel" style="display:none;margin-top:12px">
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button id="showManageProducts" class="btn">Manage Products</button>
-              <button id="showManageUsers" class="btn secondary">Manage Users</button>
-            </div>
+    <div class="two-column dashboard-layout">
+      <aside class="card" style="padding:16px;max-width:360px">
+        <h3>Profile</h3>
+        <div id="profile"></div>
+        <div id="adminOptions" style="margin-top:12px"></div>
 
-            <div id="adminProducts" style="display:none;margin-top:12px"></div>
-            <div id="adminUsers" style="display:none;margin-top:12px"></div>
+        <div id="adminPanel" style="display:none;margin-top:12px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="showManageProducts" class="btn">Manage Products</button>
+            <button id="showManageUsers" class="btn secondary">Manage Users</button>
           </div>
-        </aside>
 
-        <section>
-          <h3>Past Orders</h3>
-          <div id="orders"></div>
-        </section>
-      </div>
-    </main>
+          <div id="adminProducts" style="display:none;margin-top:12px"></div>
+          <div id="adminUsers" style="display:none;margin-top:12px"></div>
+        </div>
+      </aside>
 
-    <script src="js/products.js"></script>
-    <script src="js/app.js"></script>
-    <script src="js/dashboard-admin.js"></script>
-    <script src="js/dashboard-page.js"></script>
-  </body>
+      <section>
+        <h3>Past Orders</h3>
+        <div id="orders"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/dashboard-admin.js"></script>
+  <script src="js/dashboard-page.js"></script>
+</body>
+
 </html>

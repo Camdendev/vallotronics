@@ -1,4 +1,3 @@
-// toggle register/login
 document.getElementById('showRegister').addEventListener('click', (e) => {
   e.preventDefault();
   document.getElementById('loginSection').style.display = 'none';
@@ -17,7 +16,7 @@ document.getElementById('loginForm').addEventListener('submit', (e) => {
   const emailOrUser = document.getElementById('email').value.trim();
   const pwd = document.getElementById('password').value;
 
-  // Admin shortcut: email "admin@admin.com" and password "admin"
+  // Demo admin: email "admin@admin.com" and password "admin"
   if (emailOrUser.toLowerCase() === 'admin@admin.com' && pwd === 'admin') {
     const admin = { name: 'Admin', email: 'admin@admin.com', isAdmin: true };
     localStorage.setItem('user', JSON.stringify(admin));
@@ -33,7 +32,6 @@ document.getElementById('loginForm').addEventListener('submit', (e) => {
     return;
   }
 
-  // Default demo behavior: store a simple profile and proceed
   const user = { email: emailOrUser };
   localStorage.setItem('user', JSON.stringify(user));
   location.href = 'dashboard.html';

@@ -12,7 +12,6 @@ function renderAdminUsers() {
   const el = document.getElementById('adminUsers');
   if (!el) return;
 
-  // registered users list (demo)
   const registered = JSON.parse(localStorage.getItem('registered_users') || '[]');
   const current = JSON.parse(localStorage.getItem('user') || 'null');
 

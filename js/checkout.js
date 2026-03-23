@@ -10,7 +10,6 @@ function updateSummary() {
   }
 
   let subtotal = 0;
-  // do not show item list or count in the summary
   const itemsEl = document.getElementById('orderItems');
   itemsEl.innerHTML = '';
   cart.forEach((i) => {
@@ -31,7 +30,6 @@ function updateSummary() {
 
 updateSummary();
 
-// Autofill shipping full name from logged-in user (capitalized); do NOT autofill card name
 (function autofillShippingName() {
   const user = JSON.parse(localStorage.getItem('user') || 'null');
   if (!user) return;

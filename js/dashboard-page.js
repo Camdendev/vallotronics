@@ -1,6 +1,5 @@
 const user = JSON.parse(localStorage.getItem('user') || 'null');
 
-// set dashboard greeting (show only the email local-part before @, capitalized)
 const g = document.getElementById('dashGreeting');
 function capitalizeName(str) {
   if (!str) return '';
@@ -46,7 +45,6 @@ const orders = JSON.parse(localStorage.getItem(ordersKey) || '[]');
 const ordersHtml = orders.length
   ? orders
       .map((o) => {
-        // compute subtotal
         let subtotal = 0;
         o.items.forEach((it) => {
           const p = findProduct(it.id);
@@ -56,7 +54,6 @@ const ordersHtml = orders.length
         const ship = 4.99;
         const total = subtotal + tax + ship;
 
-        // itemized lines with per-item price
         const itemsHtml = o.items
           .map((it) => {
               const p = findProduct(it.id) || { name: 'Unknown', price: 0 };

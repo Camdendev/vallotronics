@@ -4,7 +4,8 @@ function render(list) {
 
   list.forEach((p) => {
     const d = document.createElement('div');
-    d.className = 'card';
+    d.className = 'card clickable';
+    d.dataset.productId = p.id;
     d.innerHTML = `
       <img src="${p.image}">
       <h3>${p.name}</h3>
@@ -16,7 +17,6 @@ function render(list) {
       
       <p>
         <button class="btn" data-id="${p.id}">Add to Cart</button>
-        <a href="product.html?id=${p.id}">Details</a>
       </p>
     `;
 
@@ -27,7 +27,12 @@ function render(list) {
 render(PRODUCTS);
 
 document.getElementById('list').addEventListener('click', (e) => {
-  if (e.target.dataset.id) app.addToCart(e.target.dataset.id);
+  if (e.target.dataset.id) return app.addToCart(e.target.dataset.id);
+
+  const card = e.target.closest('.card');
+  if (card && card.dataset.productId) {
+    window.location.href = `product.html?id=${card.dataset.productId}`;
+  }
 });
 
 document.getElementById('go').addEventListener('click', () => {

@@ -87,7 +87,6 @@ function placeOrder(order) {
   localStorage.removeItem('cart');
 }
 
-/* Small router helpers */
 function qs(name) {
   const u = new URLSearchParams(location.search);
   return u.get(name);
@@ -100,7 +99,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCartCount();
 });
 
-/* Expose functions for pages */
 window.app = {
   addToCart,
   removeFromCart,

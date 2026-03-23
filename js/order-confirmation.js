@@ -8,7 +8,6 @@ const el = document.getElementById('conf');
 if (!o) {
   el.innerHTML = '<p class="muted">Order not found.</p>';
 } else {
-  // compute totals
   let subtotal = 0;
   const itemsHtml = o.items.map((i) => {
     const p = findProduct(i.id);

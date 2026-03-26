@@ -25,11 +25,11 @@ if (user) {
   `;
 
   if (user.isAdmin) {
-      adminEl.innerHTML = '';
-      const panel = document.getElementById('adminPanel');
-      if (panel) panel.style.display = 'block';
-      document.getElementById('showManageProducts').addEventListener('click', () => showAdminSection('products'));
-      document.getElementById('showManageUsers').addEventListener('click', () => showAdminSection('users'));
+    adminEl.innerHTML = '';
+    const panel = document.getElementById('adminPanel');
+    if (panel) panel.style.display = 'block';
+    document.getElementById('showManageProducts').addEventListener('click', () => showAdminSection('products'));
+    document.getElementById('showManageUsers').addEventListener('click', () => showAdminSection('users'));
   } else {
     adminEl.innerHTML = '';
   }
@@ -44,24 +44,24 @@ const orders = JSON.parse(localStorage.getItem(ordersKey) || '[]');
 
 const ordersHtml = orders.length
   ? orders
-      .map((o) => {
-        let subtotal = 0;
-        o.items.forEach((it) => {
-          const p = findProduct(it.id);
-          if (p) subtotal += p.price * it.qty;
-        });
-        const tax = subtotal * 0.07;
-        const ship = 4.99;
-        const total = subtotal + tax + ship;
+    .map((o) => {
+      let subtotal = 0;
+      o.items.forEach((it) => {
+        const p = findProduct(it.id);
+        if (p) subtotal += p.price * it.qty;
+      });
+      const tax = subtotal * 0.07;
+      const ship = 4.99;
+      const total = subtotal + tax + ship;
 
-        const itemsHtml = o.items
-          .map((it) => {
-              const p = findProduct(it.id) || { name: 'Unknown', price: 0 };
-              return `<div class="muted">${p.name} x${it.qty} — <strong>$${(p.price * it.qty).toFixed(2)}</strong></div>`;
-            })
-          .join('');
+      const itemsHtml = o.items
+        .map((it) => {
+          const p = findProduct(it.id) || { name: 'Unknown', price: 0 };
+          return `<div class="muted">${p.name} x${it.qty} — <strong>$${(p.price * it.qty).toFixed(2)}</strong></div>`;
+        })
+        .join('');
 
-        return `
+      return `
             <div class="card" style="padding:12px;margin-bottom:10px">
               <div style="display:flex;justify-content:space-between;align-items:center">
                 <strong>Order ${o.id}</strong>
@@ -76,8 +76,8 @@ const ordersHtml = orders.length
               </div>
             </div>
           `;
-      })
-      .join('')
+    })
+    .join('')
   : '<p class="muted">No orders</p>';
 
 document.getElementById('orders').innerHTML = ordersHtml;

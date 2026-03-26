@@ -118,6 +118,9 @@ function renderHeader() {
   let html = '';
   html += `<a href="products.html">Products</a>`;
   if (user) {
+    html += `<a href="wishlist.html">Wishlist</a>`;
+  }
+  if (user) {
     const local = user.email ? user.email.split('@')[0] : (user.name || '');
     html += `<a href="dashboard.html">Hi, ${local}</a>`;
   } else {

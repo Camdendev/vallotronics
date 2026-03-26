@@ -24,7 +24,7 @@ if (!p) {
 
         <div style="margin-top:12px">
           <button id="add" class="btn">Add to Cart</button>
-          <a href="cart.html" class="btn secondary">View Cart</a>
+          <button id="add-wishlist" class="btn secondary">Add to Wishlist</button>
         </div>
 
         <div class="specs">
@@ -126,6 +126,24 @@ if (!p) {
   document.getElementById('add').addEventListener('click', () => {
     app.addToCart(p.id);
   });
+
+  const aw = document.getElementById('add-wishlist');
+  if (aw) {
+    aw.addEventListener('click', () => {
+      if (window.wishlist && typeof window.wishlist.add === 'function') {
+        window.wishlist.add(p.id);
+      } else {
+        const key = 'wishlist';
+        const w = JSON.parse(localStorage.getItem(key) || '[]');
+        if (!w.includes(p.id)) {
+          w.push(p.id);
+          localStorage.setItem(key, JSON.stringify(w));
+        }
+      }
+      aw.textContent = 'Added';
+      aw.disabled = true;
+    });
+  }
 
   document.getElementById('reviewForm').addEventListener('submit', (e) => {
     e.preventDefault();

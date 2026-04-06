@@ -1,31 +1,46 @@
-function getWishlist() {
-  return JSON.parse(localStorage.getItem('wishlist') || '[]');
-}
-
-function saveWishlist(w) {
-  localStorage.setItem('wishlist', JSON.stringify(w));
-}
-
-function addToWishlist(id) {
-  const w = getWishlist();
-  const n = Number(id);
-  if (!w.includes(n)) {
-    w.push(n);
-    saveWishlist(w);
+// Wishlist client no longer uses localStorage. Attempt server APIs; if unsupported, show message.
+async function fetchWishlist() {
+  try {
+    const res = await fetch('/api/wishlist');
+    if (!res.ok) throw new Error('no-wishlist');
+    return await res.json();
+  } catch (e) {
+    return null;
   }
 }
 
-function removeFromWishlist(id) {
-  let w = getWishlist();
-  w = w.filter((i) => i !== Number(id));
-  saveWishlist(w);
+async function addToWishlist(id) {
+  try {
+    const res = await fetch('/api/wishlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id) }) });
+    if (!res.ok) throw new Error('failed');
+    return true;
+  } catch (e) {
+    alert('Wishlist requires server support.');
+    return false;
+  }
 }
 
-function renderWishlist() {
+async function removeFromWishlist(id) {
+  try {
+    const res = await fetch('/api/wishlist', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id) }) });
+    if (!res.ok) throw new Error('failed');
+    return true;
+  } catch (e) {
+    alert('Wishlist requires server support.');
+    return false;
+  }
+}
+
+async function renderWishlist() {
   const el = document.getElementById('wishlist');
   if (!el) return;
 
-  const ids = getWishlist();
+  const ids = await fetchWishlist();
+  if (ids === null) {
+    el.innerHTML = '<p class="muted">Wishlist requires server support.</p>';
+    return;
+  }
+
   if (!ids.length) {
     el.innerHTML = '<p class="muted">Your wishlist is empty.</p>';
     return;
@@ -58,29 +73,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('wishlist');
   if (!container) return;
 
-  container.addEventListener('click', (e) => {
+  container.addEventListener('click', async (e) => {
     const target = e.target;
     if (target.matches('.add-cart')) {
       const id = target.getAttribute('data-id');
       if (window.app && typeof window.app.addToCart === 'function') {
         window.app.addToCart(id);
-      } else if (typeof addToCart === 'function') {
-        addToCart(id);
       }
-      removeFromWishlist(id);
+      await removeFromWishlist(id);
       renderWishlist();
     }
 
     if (target.matches('.remove-wishlist')) {
       const id = target.getAttribute('data-id');
-      removeFromWishlist(id);
+      await removeFromWishlist(id);
       renderWishlist();
     }
   });
 });
 
 window.wishlist = {
-  get: getWishlist,
+  get: fetchWishlist,
   add: addToWishlist,
   remove: removeFromWishlist,
   render: renderWishlist

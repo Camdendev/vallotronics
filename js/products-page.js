@@ -24,7 +24,9 @@ function render(list) {
   });
 }
 
-render(PRODUCTS);
+fetchProducts().then(() => {
+  render(window.PRODUCTS || []);
+});
 
 document.getElementById('list').addEventListener('click', (e) => {
   if (e.target.dataset.id) return app.addToCart(e.target.dataset.id);

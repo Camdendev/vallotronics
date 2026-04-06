@@ -1,7 +1,11 @@
 function renderAdminProducts() {
   const el = document.getElementById('adminProducts');
-  if (!el || !window.PRODUCTS) return;
-  el.innerHTML = PRODUCTS
+  if (!el) return;
+  if (!window.PRODUCTS || !window.PRODUCTS.length) {
+    fetchProducts().then(() => renderAdminProducts());
+    return;
+  }
+  el.innerHTML = window.PRODUCTS
     .map(
       (p) => `<div class="card" style="padding:10px;margin-bottom:8px"><div style="display:flex;justify-content:space-between"><div><strong>${p.name}</strong><div class="muted">$${p.price}</div></div><div><small class="muted">ID: ${p.id}</small></div></div><p class="muted">${p.desc}</p></div>`
     )

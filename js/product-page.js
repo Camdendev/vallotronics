@@ -1,10 +1,11 @@
 const id = qs('id');
-const p = findProduct(id);
 const el = document.getElementById('product');
 
-if (!p) {
-  el.innerHTML = '<p>Product not found</p>';
-} else {
+fetchProduct(id).then((p) => {
+  if (!p) {
+    el.innerHTML = '<p>Product not found</p>';
+    return;
+  }
   el.innerHTML = `
     <div class="product-detail">
       <div class="product-media card">
@@ -24,7 +25,7 @@ if (!p) {
 
         <div style="margin-top:12px">
           <button id="add" class="btn">Add to Cart</button>
-          <button id="add-wishlist" class="btn secondary">Add to Wishlist</button>
+          <div id="wishlistControl"></div>
         </div>
 
         <div class="specs">
@@ -127,39 +128,34 @@ if (!p) {
     app.addToCart(p.id);
   });
 
-  const aw = document.getElementById('add-wishlist');
-  if (aw) {
-    aw.addEventListener('click', () => {
-      if (window.wishlist && typeof window.wishlist.add === 'function') {
-        window.wishlist.add(p.id);
-      } else {
-        const key = 'wishlist';
-        const w = JSON.parse(localStorage.getItem(key) || '[]');
-        if (!w.includes(p.id)) {
-          w.push(p.id);
-          localStorage.setItem(key, JSON.stringify(w));
-        }
+  // populate wishlist control based on auth
+  fetch('/api/me').then(r => r.json()).then((user) => {
+    const ctrl = document.getElementById('wishlistControl');
+    if (!ctrl) return;
+    if (user) {
+      ctrl.innerHTML = `<button id="add-wishlist" class="btn secondary">Add to Wishlist</button>`;
+      const aw = document.getElementById('add-wishlist');
+      if (aw) {
+        aw.addEventListener('click', async () => {
+          if (window.wishlist && typeof window.wishlist.add === 'function') {
+            await window.wishlist.add(p.id);
+            aw.textContent = 'Added';
+            aw.disabled = true;
+          }
+        });
       }
-      aw.textContent = 'Added';
-      aw.disabled = true;
-    });
-  }
+    } else {
+      ctrl.innerHTML = `<div class="muted" style="margin-top:8px">You must be logged in to wishlist items</div>`;
+    }
+  }).catch(() => {
+    const ctrl = document.getElementById('wishlistControl');
+    if (ctrl) ctrl.innerHTML = `<div class="muted" style="margin-top:8px">You must be logged in to wishlist items</div>`;
+  });
 
   document.getElementById('reviewForm').addEventListener('submit', (e) => {
     e.preventDefault();
-
-    const review = {
-      name: document.getElementById('rname').value,
-      text: document.getElementById('rtext').value,
-      rating: Number(document.getElementById('rscore').value),
-      date: new Date().toISOString()
-    };
-
-    saveReview(p.id, review);
-    document.getElementById('avg').textContent = averageRating(p.id);
-    renderReviews();
-    document.getElementById('reviewForm').reset();
+    alert('Submitting reviews requires server support; this feature is disabled.');
   });
 
   renderReviews();
-}
+});

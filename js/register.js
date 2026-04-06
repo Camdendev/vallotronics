@@ -1,11 +1,27 @@
 document.getElementById('regForm').addEventListener('submit', (e) => {
   e.preventDefault();
 
-  const u = {
-    name: document.getElementById('name').value,
-    email: document.getElementById('email').value
+  const payload = {
+    username: document.getElementById('email').value,
+    email: document.getElementById('email').value,
+    password: document.getElementById('password') ? document.getElementById('password').value : '',
+    first_name: document.getElementById('name') ? document.getElementById('name').value : ''
   };
 
-  localStorage.setItem('user', JSON.stringify(u));
-  location.href = 'dashboard.html';
+  fetch('/api/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(async (res) => {
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || 'Registration failed');
+      return;
+    }
+    // server sets session; redirect and let header fetch /api/me
+    location.href = 'dashboard.html';
+  }).catch((e) => {
+    console.error(e);
+    alert('Registration failed');
+  });
 });

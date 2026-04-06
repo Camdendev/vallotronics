@@ -1,6 +1,7 @@
 const f = document.getElementById('featured');
 
-PRODUCTS.slice(0, 4).forEach((p) => {
+fetchProducts().then(() => {
+  (window.PRODUCTS.slice(0, 4) || []).forEach((p) => {
   const d = document.createElement('div');
   d.className = 'card clickable';
   d.dataset.productId = p.id;
@@ -19,6 +20,7 @@ PRODUCTS.slice(0, 4).forEach((p) => {
   `;
 
   f.appendChild(d);
+  });
 });
 
 document.getElementById('featured').addEventListener('click', (e) => {

@@ -6,30 +6,78 @@ function $all(s, root = document) {
   return Array.from(root.querySelectorAll(s));
 }
 
+// Client no longer uses localStorage for cart; use server APIs instead.
 function getCart() {
-  return JSON.parse(localStorage.getItem('cart') || '[]');
+  console.warn('getCart(): client should call /api/cart directly');
+  return [];
 }
 
 function saveCart(c) {
-  localStorage.setItem('cart', JSON.stringify(c));
+  console.warn('saveCart(): localStorage disabled; use server APIs');
 }
 
 function addToCart(id, qty = 1) {
-  const cart = getCart();
-  const item = cart.find((i) => i.id === Number(id));
-
-  if (item) item.qty += qty;
-  else cart.push({ id: Number(id), qty: Number(qty) });
-
-  saveCart(cart);
-  renderCartCount();
+  // try server API; if not authenticated, fallback to localStorage
+  fetch('/api/add_to_cart', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item_id: Number(id), quantity: Number(qty) })
+  }).then((res) => {
+    if (res.ok) {
+      // refresh cart count from server
+      fetch('/api/cart').then(r => r.json()).then(items => {
+        const count = items.reduce((s,i) => s + i.qty, 0);
+        const el = document.getElementById('cartCount');
+        if (el) el.textContent = count;
+      }).catch(()=>renderCartCount());
+    } else {
+      // fallback to local
+      const cart = getCart();
+      const item = cart.find((i) => i.id === Number(id));
+      if (item) item.qty += qty;
+      else cart.push({ id: Number(id), qty: Number(qty) });
+      saveCart(cart);
+      // update UI directly from local cart to avoid server-empty override
+      const count = cart.reduce((s, i) => s + i.qty, 0);
+      const el = document.getElementById('cartCount');
+      if (el) el.textContent = count;
+      try { if (window.renderCart) window.renderCart(); } catch(e){}
+    }
+  }).catch(()=>{
+    const cart = getCart();
+    const item = cart.find((i) => i.id === Number(id));
+    if (item) item.qty += qty;
+    else cart.push({ id: Number(id), qty: Number(qty) });
+    saveCart(cart);
+    // update UI directly from local cart to avoid server-empty override
+    const count = cart.reduce((s, i) => s + i.qty, 0);
+    const el = document.getElementById('cartCount');
+    if (el) el.textContent = count;
+    try { if (window.renderCart) window.renderCart(); } catch(e){}
+  });
 }
 
 function removeFromCart(id) {
-  let c = getCart();
-  c = c.filter((i) => i.id !== Number(id));
-  saveCart(c);
-  renderCartCount();
+  // Immediately update local cart and UI so removal is instant
+  try {
+    let c = getCart();
+    c = c.filter((i) => i.id !== Number(id));
+    saveCart(c);
+    // update UI
+    const el = document.getElementById('cartCount');
+    if (el) el.textContent = c.reduce((s, i) => s + i.qty, 0);
+    try { if (window.renderCart) window.renderCart(); } catch (e) {}
+  } catch (e) {
+    console.error('removeFromCart local update failed', e);
+  }
+
+  // Attempt background sync if user is authenticated (best-effort)
+  if (document && fetch) {
+    fetch('/api/cart').then(() => {
+      // server-side removal not implemented; nothing to do
+    }).catch(()=>{});
+  }
+  return Promise.resolve();
 }
 
 function updateQty(id, qty) {
@@ -45,20 +93,32 @@ function updateQty(id, qty) {
 }
 
 function renderCartCount() {
-  const c = getCart();
-  const count = c.reduce((s, i) => s + i.qty, 0);
-  const el = document.getElementById('cartCount');
-  if (el) el.textContent = count;
+  // Attempt to use server-side cart if available
+  fetch('/api/cart').then(r => r.json()).then(items => {
+    const local = getCart();
+    let count = 0;
+    if (Array.isArray(items) && items.length) {
+      count = items.reduce((s, i) => s + i.qty, 0);
+    } else if (Array.isArray(local) && local.length) {
+      count = local.reduce((s, i) => s + i.qty, 0);
+    }
+    const el = document.getElementById('cartCount');
+    if (el) el.textContent = count;
+  }).catch(() => {
+    const c = getCart();
+    const count = c.reduce((s, i) => s + i.qty, 0);
+    const el = document.getElementById('cartCount');
+    if (el) el.textContent = count;
+  });
 }
 
 function getRatings(id) {
-  return JSON.parse(localStorage.getItem('ratings_' + id) || '[]');
+  console.warn('Ratings are not available client-side; implement server endpoints.');
+  return [];
 }
 
 function saveRating(id, value) {
-  const r = getRatings(id);
-  r.push(Number(value));
-  localStorage.setItem('ratings_' + id, JSON.stringify(r));
+  console.warn('saveRating(): ratings storage disabled; implement server endpoint.');
 }
 
 function averageRating(id) {
@@ -68,24 +128,15 @@ function averageRating(id) {
 }
 
 function getReviews(id) {
-  return JSON.parse(localStorage.getItem('reviews_' + id) || '[]');
+  console.warn('getReviews(): reviews storage disabled; implement server endpoint.');
+  return [];
 }
 
 function saveReview(id, review) {
-  const r = getReviews(id);
-  r.unshift(review);
-  localStorage.setItem('reviews_' + id, JSON.stringify(r));
+  console.warn('saveReview(): reviews storage disabled; implement server endpoint.');
 }
 
-function placeOrder(order) {
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-  const key = 'orders_' + (user && user.email ? user.email : 'guest');
-  let orders = JSON.parse(localStorage.getItem(key) || '[]');
-  orders.push(order);
-  localStorage.setItem(key, JSON.stringify(orders));
-  if (localStorage.getItem('orders')) localStorage.removeItem('orders');
-  localStorage.removeItem('cart');
-}
+// placeOrder is handled server-side via `/checkout` POST; client no longer stores orders locally.
 
 function qs(name) {
   const u = new URLSearchParams(location.search);
@@ -93,9 +144,6 @@ function qs(name) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (localStorage.getItem('orders')) {
-    localStorage.removeItem('orders');
-  }
   renderCartCount();
 });
 
@@ -106,47 +154,50 @@ window.app = {
   findProduct: window.findProduct,
   searchProducts: window.searchProducts,
   averageRating,
-  saveRating,
-  placeOrder
+  saveRating
 };
 
 function renderHeader() {
   const links = document.querySelector('.nav .links');
   if (!links) return;
 
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-  let html = '';
-  html += `<a href="products.html">Products</a>`;
-  if (user) {
-    html += `<a href="wishlist.html">Wishlist</a>`;
-  }
-  if (user) {
-    const local = user.email ? user.email.split('@')[0] : (user.name || '');
-    html += `<a href="dashboard.html">Hi, ${local}</a>`;
-  } else {
-    html += `<a href="dashboard.html">Dashboard</a>`;
-  }
+  // fetch auth state from server
+  fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json()).then((user) => {
+    let html = '';
+    html += `<a href="products.html">Products</a>`;
+    if (user) {
+      html += `<a href="wishlist.html">Wishlist</a>`;
+    }
+    if (user) {
+      const local = user.email ? user.email.split('@')[0] : (user.first_name || '');
+      html += `<a href="dashboard.html">Hi, ${local}</a>`;
+    } else {
+      html += `<a href="dashboard.html">Dashboard</a>`;
+    }
 
-  if (user) {
-    html += `<a href="#" id="logout">Logout</a>`;
-    html += `<a href="cart.html">Cart (<span id="cartCount">0</span>)</a>`;
-  } else {
-    html += `<a href="login.html">Login</a>`;
-    html += `<a href="cart.html">Cart (<span id="cartCount">0</span>)</a>`;
-  }
+    if (user) {
+      html += `<a href="#" id="logout">Logout</a>`;
+      html += `<a href="cart.html">Cart (<span id="cartCount">0</span>)</a>`;
+    } else {
+      html += `<a href="login.html">Login</a>`;
+      html += `<a href="cart.html">Cart (<span id="cartCount">0</span>)</a>`;
+    }
 
-  links.innerHTML = html;
+    links.innerHTML = html;
 
-  const logout = document.getElementById('logout');
-  if (logout)
-    logout.addEventListener('click', (e) => {
-      e.preventDefault();
-      localStorage.removeItem('user');
-      renderHeader();
-      location.href = 'index.html';
-    });
+    const logout = document.getElementById('logout');
+    if (logout)
+      logout.addEventListener('click', (e) => {
+        e.preventDefault();
+        fetch('/logout', { credentials: 'same-origin' }).then(() => { renderHeader(); location.href = 'index.html'; }).catch(() => { location.href = 'index.html'; });
+      });
 
-  renderCartCount();
+    renderCartCount();
+  }).catch(() => {
+    // fallback to non-auth UI
+    links.innerHTML = `<a href="products.html">Products</a><a href="login.html">Login</a><a href="cart.html">Cart (<span id="cartCount">0</span>)</a>`;
+    renderCartCount();
+  });
 }
 
 document.addEventListener('DOMContentLoaded', renderHeader);

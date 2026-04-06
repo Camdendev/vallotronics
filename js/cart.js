@@ -1,12 +1,12 @@
-(function () {
-  function renderCart() {
-    const listEl = document.getElementById('cart');
-    const summaryEl = document.getElementById('summary');
-    const cart = getCart();
+async function renderCart() {
+  const listEl = document.getElementById('cart');
+  const summaryEl = document.getElementById('summary');
+  if (!listEl || !summaryEl) return;
 
-    if (!listEl || !summaryEl) return;
-
-    if (!cart.length) {
+  try {
+    const res = await fetch('/api/cart');
+    const cart = await res.json();
+    if (!cart || !cart.length) {
       listEl.innerHTML = '<p class="muted">Cart is empty</p>';
       summaryEl.innerHTML = '';
       return;
@@ -38,10 +38,14 @@
     const ship = 4.99;
     const total = subtotal + tax + ship;
 
-    const user = JSON.parse(localStorage.getItem('user') || 'null');
-    const checkoutControl = user
-      ? `<div class="summary-primary" style="margin-top:30px;margin-bottom:18px;clear:both"><a href="checkout.html" class="btn">Proceed to checkout</a></div>`
-      : `<div class="summary-primary muted" style="margin-top:40px;margin-bottom:18px;clear:both">Please <a href="login.html">log in</a> to checkout.</div>`;
+    // show checkout only if server says user is authenticated
+    let checkoutControl = `<div class="summary-primary muted" style="margin-top:40px;margin-bottom:18px;clear:both">Please <a href="login.html">log in</a> to checkout.</div>`;
+    try {
+      const me = await fetch('/api/me').then(r => r.json());
+      if (me) {
+        checkoutControl = `<div class="summary-primary" style="margin-top:30px;margin-bottom:18px;clear:both"><a href="checkout.html" class="btn">Proceed to checkout</a></div>`;
+      }
+    } catch (e) {}
 
     summaryEl.innerHTML = `
       <h3>Order Summary</h3>
@@ -53,31 +57,55 @@
       ${checkoutControl}
       <div class="summary-actions" style="margin-top:24px;clear:both"><a href="products.html" class="btn secondary">Continue shopping</a></div>
     `;
+  } catch (e) {
+    listEl.innerHTML = '<p class="muted">Failed to load cart.</p>';
+    summaryEl.innerHTML = '';
   }
+}
 
-  document.addEventListener('click', (e) => {
-    const removeBtn = e.target.closest('[data-remove]');
-    if (removeBtn) {
-      const id = removeBtn.getAttribute('data-remove');
-      if (id) {
-        app.removeFromCart(id);
-        renderCart();
-      }
+// remove handler: try server endpoint, otherwise refresh
+document.addEventListener('click', (e) => {
+  const removeBtn = e.target.closest('[data-remove]');
+  if (removeBtn) {
+    const id = removeBtn.getAttribute('data-remove');
+    if (id) {
+      fetch('/api/remove_from_cart', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id) }) })
+        .then((res) => {
+          if (res.status === 401) {
+            alert('Please login to modify your cart');
+            return;
+          }
+          renderCart();
+        }).catch(() => {
+          alert('Failed to remove item from cart (server).');
+        });
     }
-  });
+  }
+});
 
-  document.addEventListener('change', (e) => {
-    const input = e.target.closest('input[data-id]');
-    if (input) {
-      const id = input.getAttribute('data-id');
-      const val = input.value;
-      if (id && val) {
-        app.updateQty(id, val);
-        renderCart();
-      }
+// qty change: try server update endpoint
+document.addEventListener('change', (e) => {
+  const input = e.target.closest('input[data-id]');
+  if (input) {
+    const id = input.getAttribute('data-id');
+    const val = input.value;
+    if (id && val) {
+      fetch('/api/update_cart', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id), quantity: Number(val) }) })
+        .then((res) => {
+          if (res.status === 401) { alert('Please login to update cart'); return; }
+          if (!res.ok) { alert('Failed to update cart'); }
+          renderCart();
+        }).catch(() => { alert('Cart update failed'); });
     }
-  });
+  }
+});
 
-  document.addEventListener('DOMContentLoaded', renderCart);
-  window.renderCart = renderCart;
-})();
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.fetchProducts) {
+    window.fetchProducts().then(renderCart).catch(renderCart);
+  } else {
+    renderCart();
+  }
+});
+
+window.renderCart = renderCart;

@@ -1,19 +1,18 @@
 const id = qs('id');
-const user = JSON.parse(localStorage.getItem('user') || 'null');
-const key = 'orders_' + (user && user.email ? user.email : 'guest');
-const orders = JSON.parse(localStorage.getItem(key) || '[]');
-const o = orders.find((x) => x.id == id) || orders[orders.length - 1];
-
 const el = document.getElementById('conf');
-if (!o) {
-  el.innerHTML = '<p class="muted">Order not found.</p>';
-} else {
+
+fetch(`/api/orders/${id}`).then(async (res) => {
+  if (!res.ok) {
+    el.innerHTML = '<p class="muted">Order not found or you must be logged in.</p>';
+    return;
+  }
+  const o = await res.json();
   let subtotal = 0;
   const itemsHtml = o.items.map((i) => {
-    const p = findProduct(i.id);
-    const line = (p.price * i.qty);
+    const p = findProduct(i.item_id) || { name: 'Unknown', price: 0 };
+    const line = (p.price * i.quantity);
     subtotal += line;
-    return `<li class="muted">${p.name} x${i.qty} — <strong>$${(line).toFixed(2)}</strong></li>`;
+    return `<li class="muted">${p.name} x${i.quantity} — <strong>$${(line).toFixed(2)}</strong></li>`;
   }).join('');
 
   const tax = subtotal * 0.07;
@@ -27,9 +26,9 @@ if (!o) {
 
       <h4>Shipping</h4>
       <div class="specs">
-        <div>${o.shipping.name}</div>
-        <div>${o.shipping.address}</div>
-        <div>${o.shipping.city} ${o.shipping.zip}</div>
+        <div>${o.shipping && o.shipping.name ? o.shipping.name : ''}</div>
+        <div>${o.shipping && o.shipping.address ? o.shipping.address : ''}</div>
+        <div>${o.shipping && (o.shipping.city || '')} ${o.shipping && (o.shipping.postal_code || '')}</div>
       </div>
 
       <h4 style="margin-top:12px">Items</h4>
@@ -49,4 +48,6 @@ if (!o) {
       </div>
     </div>
   `;
-}
+}).catch(() => {
+  el.innerHTML = '<p class="muted">Order fetch failed.</p>';
+});

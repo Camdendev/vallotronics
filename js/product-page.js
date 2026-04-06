@@ -1,4 +1,4 @@
-const id = qs('id');
+const id = qs('id') || (location.pathname.match(/product\/(\d+)/) || [])[1];
 const el = document.getElementById('product');
 
 fetchProduct(id).then((p) => {
@@ -28,10 +28,11 @@ fetchProduct(id).then((p) => {
           <div id="wishlistControl"></div>
         </div>
 
+        ${p.specs && Object.keys(p.specs).length ? `
         <div class="specs">
           <h4>Specifications</h4>
           <table class="spec-table">
-            ${Object.entries(p.specs || {}).map(([k, v]) => {
+            ${Object.entries(p.specs).map(([k, v]) => {
               const acronyms = {
                 vram: 'VRAM',
                 tdp: 'TDP',
@@ -61,23 +62,19 @@ fetchProduct(id).then((p) => {
             }).join('')}
           </table>
         </div>
+        ` : ''}
 
         <div class="reviews">
-          <h3>Customer Reviews <span class="muted">(Average <span id="avg">${averageRating(p.id)}</span>)</span></h3>
-          <div id="reviewList" class="review-list"></div>
+          <h3>Customer Reviews <span class="muted">(Average <span id="avg">0</span>)</span></h3>
+            <div id="reviewList" class="review-list"></div>
 
           <div class="review-form" style="margin-top:12px">
             <h4>Write a Review</h4>
             <form id="reviewForm">
-              <div class="form-row">
-                <label for="rname">Your Name</label>
-                <input class="form-input" id="rname" placeholder="Name" required>
-              </div>
-
-              <div class="form-row">
-                <label for="rtext">Review</label>
-                <textarea class="form-input" id="rtext" rows="4" placeholder="Share your experience" required></textarea>
-              </div>
+                  <div class="form-row">
+                    <label for="rtext">Review</label>
+                    <textarea class="form-input" id="rtext" rows="4" placeholder="Share your experience" required></textarea>
+                  </div>
 
               <div class="form-row">
                 <label for="rscore">Rating</label>
@@ -100,28 +97,37 @@ fetchProduct(id).then((p) => {
     </div>
   `;
 
-  function renderReviews() {
+  async function renderReviews() {
     const list = document.getElementById('reviewList');
     list.innerHTML = '';
-    const reviews = getReviews(p.id);
+    const containerAvg = document.getElementById('avg');
+    try {
+      const res = await fetch(`/api/reviews?item_id=${p.id}`, { credentials: 'same-origin' });
+      if (!res.ok) { list.innerHTML = '<p class="muted">Failed to load reviews.</p>'; return; }
+      const j = await res.json();
+      const reviews = j.reviews || [];
+      if (containerAvg) containerAvg.textContent = (j.avg || 0).toString();
 
-    if (!reviews.length) {
-      list.innerHTML = '<p class="muted">No Reviews Yet.</p>';
-      return;
+      if (!reviews.length) {
+        list.innerHTML = '<p class="muted">No Reviews Yet.</p>';
+        return;
+      }
+
+      reviews.forEach((r) => {
+        const d = document.createElement('div');
+        d.className = 'review';
+        const date = r.created_at ? new Date(r.created_at).toLocaleDateString() : '';
+        d.innerHTML = `
+          <div class="meta">
+            <strong>${r.username || 'Anonymous'}</strong> — <span class="muted">${date} • ${'★'.repeat(r.rating)}${r.rating < 5 ? '☆'.repeat(5 - r.rating) : ''}</span>
+          </div>
+          <div>${r.text || ''}</div>
+        `;
+        list.appendChild(d);
+      });
+    } catch (e) {
+      list.innerHTML = '<p class="muted">Failed to load reviews.</p>';
     }
-
-    reviews.forEach((r) => {
-      const d = document.createElement('div');
-      d.className = 'review';
-      d.innerHTML = `
-        <div class="meta">
-          <strong>${r.name}</strong> — <span class="muted">${new Date(r.date).toLocaleDateString()} • ${'★'.repeat(r.rating)}${r.rating < 5 ? '☆'.repeat(5 - r.rating) : ''}</span>
-        </div>
-        <div>${r.text}</div>
-      `;
-
-      list.appendChild(d);
-    });
   }
 
   document.getElementById('add').addEventListener('click', () => {
@@ -129,7 +135,7 @@ fetchProduct(id).then((p) => {
   });
 
   // populate wishlist control based on auth
-  fetch('/api/me').then(r => r.json()).then((user) => {
+  fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json()).then((user) => {
     const ctrl = document.getElementById('wishlistControl');
     if (!ctrl) return;
     if (user) {
@@ -152,9 +158,18 @@ fetchProduct(id).then((p) => {
     if (ctrl) ctrl.innerHTML = `<div class="muted" style="margin-top:8px">You must be logged in to wishlist items</div>`;
   });
 
-  document.getElementById('reviewForm').addEventListener('submit', (e) => {
+  document.getElementById('reviewForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    alert('Submitting reviews requires server support; this feature is disabled.');
+    const text = document.getElementById('rtext').value;
+    const rating = document.getElementById('rscore').value;
+    try {
+      await saveReview(p.id, { rating: Number(rating), text });
+      document.getElementById('rtext').value = '';
+      document.getElementById('rscore').value = '5';
+      await renderReviews();
+    } catch (err) {
+      alert(err.message || 'Failed to submit review');
+    }
   });
 
   renderReviews();

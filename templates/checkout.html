@@ -22,26 +22,26 @@
     <h2>Checkout & Shipping</h2>
 
     <div class="two-column" style="display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start">
-      <form id="checkoutForm" class="card">
+      <form id="checkoutForm" class="card" method="POST" action="/checkout">
         <div class="form-row">
           <label for="fullname">Full name</label>
-          <input class="form-input" id="fullname" placeholder="Full name" required>
+          <input class="form-input" id="fullname" name="fullname" placeholder="Full name" required>
         </div>
 
         <div class="form-row">
           <label for="address">Address</label>
-          <input class="form-input" id="address" placeholder="Address" required>
+          <input class="form-input" id="address" name="address" placeholder="Address" required>
         </div>
 
         <div class="form-row" style="display:flex;gap:8px">
           <div style="flex:1">
             <label for="city">City</label>
-            <input class="form-input" id="city" placeholder="City" required>
+            <input class="form-input" id="city" name="city" placeholder="City" required>
           </div>
 
           <div style="width:120px">
             <label for="zip">ZIP</label>
-            <input class="form-input" id="zip" placeholder="ZIP" required>
+            <input class="form-input" id="zip" name="postal_code" placeholder="ZIP" required>
           </div>
         </div>
 
@@ -49,7 +49,7 @@
 
         <div class="form-row">
           <label for="cardName">Cardholder name</label>
-          <input class="form-input" id="cardName" placeholder="Name on card" required>
+          <input class="form-input" id="cardName" name="card_name" placeholder="Name on card" required>
         </div>
 
         <div class="form-row">
@@ -70,6 +70,9 @@
         </div>
 
         <div class="form-row">
+          <input type="hidden" name="payment_method" value="Card">
+          <input type="hidden" name="state" value="">
+          <input type="hidden" name="country" value="">
           <button id="placeOrderBtn" class="btn" type="submit">Place Order</button>
           <a href="/cart.html" class="btn secondary back-to-cart">Back to cart</a>
         </div>

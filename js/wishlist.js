@@ -1,7 +1,7 @@
 // Wishlist client no longer uses localStorage. Attempt server APIs; if unsupported, show message.
 async function fetchWishlist() {
   try {
-    const res = await fetch('/api/wishlist');
+    const res = await fetch('/api/wishlist', { credentials: 'same-origin' });
     if (!res.ok) throw new Error('no-wishlist');
     return await res.json();
   } catch (e) {
@@ -11,7 +11,7 @@ async function fetchWishlist() {
 
 async function addToWishlist(id) {
   try {
-    const res = await fetch('/api/wishlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id) }) });
+    const res = await fetch('/api/wishlist', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id) }) });
     if (!res.ok) throw new Error('failed');
     return true;
   } catch (e) {
@@ -22,7 +22,7 @@ async function addToWishlist(id) {
 
 async function removeFromWishlist(id) {
   try {
-    const res = await fetch('/api/wishlist', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id) }) });
+    const res = await fetch('/api/wishlist', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id) }) });
     if (!res.ok) throw new Error('failed');
     return true;
   } catch (e) {

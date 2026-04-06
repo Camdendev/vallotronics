@@ -1,7 +1,7 @@
-const id = qs('id');
+const id = qs('id') || (location.pathname.match(/order-confirmation\/(\d+)/) || [])[1];
 const el = document.getElementById('conf');
 
-fetch(`/api/orders/${id}`).then(async (res) => {
+fetch(`/api/orders/${id}`, { credentials: 'same-origin' }).then(async (res) => {
   if (!res.ok) {
     el.innerHTML = '<p class="muted">Order not found or you must be logged in.</p>';
     return;
@@ -18,18 +18,10 @@ fetch(`/api/orders/${id}`).then(async (res) => {
   const tax = subtotal * 0.07;
   const ship = 4.99;
   const total = subtotal + tax + ship;
-
   el.innerHTML = `
     <div class="card">
       <h3>Order #${o.id}</h3>
       <p class="muted">Thank you! Your order has been received and is being processed.</p>
-
-      <h4>Shipping</h4>
-      <div class="specs">
-        <div>${o.shipping && o.shipping.name ? o.shipping.name : ''}</div>
-        <div>${o.shipping && o.shipping.address ? o.shipping.address : ''}</div>
-        <div>${o.shipping && (o.shipping.city || '')} ${o.shipping && (o.shipping.postal_code || '')}</div>
-      </div>
 
       <h4 style="margin-top:12px">Items</h4>
       <ul>${itemsHtml}</ul>
@@ -43,8 +35,8 @@ fetch(`/api/orders/${id}`).then(async (res) => {
       </div>
 
       <div style="margin-top:14px;display:flex;gap:8px">
-        <a href="products.html" class="btn">Continue shopping</a>
-        <a href="dashboard.html" class="btn secondary">View orders</a>
+        <a href="/products.html" class="btn">Continue shopping</a>
+        <a href="/dashboard.html" class="btn secondary">View orders</a>
       </div>
     </div>
   `;

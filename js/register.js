@@ -10,6 +10,7 @@ document.getElementById('regForm').addEventListener('submit', (e) => {
 
   fetch('/api/register', {
     method: 'POST',
+    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   }).then(async (res) => {
@@ -19,7 +20,7 @@ document.getElementById('regForm').addEventListener('submit', (e) => {
       return;
     }
     // server sets session; redirect and let header fetch /api/me
-    location.href = 'dashboard.html';
+    location.href = '/dashboard.html';
   }).catch((e) => {
     console.error(e);
     alert('Registration failed');

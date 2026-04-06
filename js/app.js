@@ -21,11 +21,12 @@ function addToCart(id, qty = 1) {
   fetch('/api/add_to_cart', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
     body: JSON.stringify({ item_id: Number(id), quantity: Number(qty) })
   }).then((res) => {
     if (res.ok) {
       // refresh cart count from server
-      fetch('/api/cart').then(r => r.json()).then(items => {
+      fetch('/api/cart', { credentials: 'same-origin' }).then(r => r.json()).then(items => {
         const count = items.reduce((s,i) => s + i.qty, 0);
         const el = document.getElementById('cartCount');
         if (el) el.textContent = count;
@@ -73,7 +74,7 @@ function removeFromCart(id) {
 
   // Attempt background sync if user is authenticated (best-effort)
   if (document && fetch) {
-    fetch('/api/cart').then(() => {
+    fetch('/api/cart', { credentials: 'same-origin' }).then(() => {
       // server-side removal not implemented; nothing to do
     }).catch(()=>{});
   }
@@ -94,7 +95,7 @@ function updateQty(id, qty) {
 
 function renderCartCount() {
   // Attempt to use server-side cart if available
-  fetch('/api/cart').then(r => r.json()).then(items => {
+  fetch('/api/cart', { credentials: 'same-origin' }).then(r => r.json()).then(items => {
     const local = getCart();
     let count = 0;
     if (Array.isArray(items) && items.length) {
@@ -120,20 +121,39 @@ function getRatings(id) {
 function saveRating(id, value) {
   console.warn('saveRating(): ratings storage disabled; implement server endpoint.');
 }
-
-function averageRating(id) {
-  const r = getRatings(id);
-  if (!r.length) return 0;
-  return (r.reduce((a, b) => a + b, 0) / r.length).toFixed(1);
+function saveRating(id, value) {
+  console.warn('saveRating(): ratings storage disabled; implement server endpoint.');
 }
 
-function getReviews(id) {
-  console.warn('getReviews(): reviews storage disabled; implement server endpoint.');
-  return [];
+async function averageRating(id) {
+  try {
+    const res = await fetch(`/api/reviews?item_id=${id}`, { credentials: 'same-origin' });
+    if (!res.ok) return 0;
+    const j = await res.json();
+    return j.avg || 0;
+  } catch (e) {
+    return 0;
+  }
 }
 
-function saveReview(id, review) {
-  console.warn('saveReview(): reviews storage disabled; implement server endpoint.');
+async function getReviews(id) {
+  try {
+    const res = await fetch(`/api/reviews?item_id=${id}`, { credentials: 'same-origin' });
+    if (!res.ok) return [];
+    const j = await res.json();
+    return j.reviews || [];
+  } catch (e) { return []; }
+}
+
+async function saveReview(item_id, { rating, text }) {
+  try {
+    const res = await fetch('/api/reviews', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(item_id), rating: Number(rating), text }) });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'save failed');
+    }
+    return await res.json();
+  } catch (e) { throw e; }
 }
 
 // placeOrder is handled server-side via `/checkout` POST; client no longer stores orders locally.
@@ -164,23 +184,23 @@ function renderHeader() {
   // fetch auth state from server
   fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json()).then((user) => {
     let html = '';
-    html += `<a href="products.html">Products</a>`;
+    html += `<a href="/products.html">Products</a>`;
     if (user) {
-      html += `<a href="wishlist.html">Wishlist</a>`;
+      html += `<a href="/wishlist.html">Wishlist</a>`;
     }
     if (user) {
       const local = user.email ? user.email.split('@')[0] : (user.first_name || '');
-      html += `<a href="dashboard.html">Hi, ${local}</a>`;
+      html += `<a href="/dashboard.html">Hi, ${local}</a>`;
     } else {
-      html += `<a href="dashboard.html">Dashboard</a>`;
+      html += `<a href="/dashboard.html">Dashboard</a>`;
     }
 
     if (user) {
       html += `<a href="#" id="logout">Logout</a>`;
-      html += `<a href="cart.html">Cart (<span id="cartCount">0</span>)</a>`;
+      html += `<a href="/cart.html">Cart (<span id="cartCount">0</span>)</a>`;
     } else {
-      html += `<a href="login.html">Login</a>`;
-      html += `<a href="cart.html">Cart (<span id="cartCount">0</span>)</a>`;
+      html += `<a href="/login.html">Login</a>`;
+      html += `<a href="/cart.html">Cart (<span id="cartCount">0</span>)</a>`;
     }
 
     links.innerHTML = html;
@@ -189,13 +209,13 @@ function renderHeader() {
     if (logout)
       logout.addEventListener('click', (e) => {
         e.preventDefault();
-        fetch('/logout', { credentials: 'same-origin' }).then(() => { renderHeader(); location.href = 'index.html'; }).catch(() => { location.href = 'index.html'; });
+        fetch('/logout', { credentials: 'same-origin' }).then(() => { renderHeader(); location.href = '/'; }).catch(() => { location.href = '/'; });
       });
 
     renderCartCount();
   }).catch(() => {
     // fallback to non-auth UI
-    links.innerHTML = `<a href="products.html">Products</a><a href="login.html">Login</a><a href="cart.html">Cart (<span id="cartCount">0</span>)</a>`;
+    links.innerHTML = `<a href="/products.html">Products</a><a href="/login.html">Login</a><a href="/cart.html">Cart (<span id="cartCount">0</span>)</a>`;
     renderCartCount();
   });
 }

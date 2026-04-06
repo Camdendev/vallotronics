@@ -15,40 +15,34 @@ function renderAdminProducts() {
 function renderAdminUsers() {
   const el = document.getElementById('adminUsers');
   if (!el) return;
+  // fetch users from server (admin only)
+  fetch('/api/users', { credentials: 'same-origin' }).then(async (res) => {
+    const rows = await res.json();
+    if (!rows || !rows.length) {
+      el.innerHTML = '<p class="muted">No users</p>';
+      return;
+    }
 
-  const registered = JSON.parse(localStorage.getItem('registered_users') || '[]');
-  const current = JSON.parse(localStorage.getItem('user') || 'null');
-
-  const rows = [];
-  if (current) rows.push(current);
-  registered.forEach((r) => rows.push(r));
-
-  if (!rows.length) {
-    el.innerHTML = '<p class="muted">No users (demo)</p>';
-    return;
-  }
-
-  el.innerHTML = rows
-    .map((u, i) => `
+    el.innerHTML = rows
+      .map((u) => `
       <div class="card" style="padding:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div><strong>${u.name || u.email}</strong></div>
+          <div><strong>${u.first_name || u.username || u.email}</strong></div>
           <div class="muted">${u.email || ''}</div>
         </div>
         <div>
-          <button class="btn secondary" data-idx="${i}" onclick="removeRegisteredUser(${i})">Remove</button>
+          <button class="btn secondary" data-id="${u.user_id}">Remove</button>
         </div>
       </div>
     `)
-    .join('');
+      .join('');
+  }).catch(() => {
+    el.innerHTML = '<p class="muted">Failed to load users</p>';
+  });
 }
 
 function removeRegisteredUser(idx) {
-  const registered = JSON.parse(localStorage.getItem('registered_users') || '[]');
-  if (idx < 0 || idx >= registered.length) return;
-  registered.splice(idx, 1);
-  localStorage.setItem('registered_users', JSON.stringify(registered));
-  renderAdminUsers();
+  // deprecated: server-managed users now
 }
 
 function showAdminSection(name) {
@@ -64,10 +58,31 @@ function showAdminSection(name) {
 }
 
 function deleteOrder(id) {
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-  const key = 'orders_' + (user && user.email ? user.email : 'guest');
-  let orders = JSON.parse(localStorage.getItem(key) || '[]');
-  orders = orders.filter((o) => o.id != id);
-  localStorage.setItem(key, JSON.stringify(orders));
-  location.reload();
+  // call server delete endpoint; admin or owner allowed
+  fetch(`/api/orders/${id}`, { method: 'DELETE', credentials: 'same-origin' }).then(async (res) => {
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      alert(e.error || 'Failed to delete order');
+      return;
+    }
+    location.reload();
+  }).catch(() => { alert('Failed to contact server'); });
 }
+
+// handle remove user button
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('#adminUsers button[data-id]');
+  if (btn) {
+    const id = btn.getAttribute('data-id');
+    if (!id) return;
+    if (!confirm('Delete user #' + id + '?')) return;
+    fetch(`/api/users/${id}`, { method: 'DELETE', credentials: 'same-origin' }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to delete user');
+        return;
+      }
+      renderAdminUsers();
+    }).catch(() => { alert('Failed to contact server'); });
+  }
+});

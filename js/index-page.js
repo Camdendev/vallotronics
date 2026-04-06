@@ -28,6 +28,6 @@ document.getElementById('featured').addEventListener('click', (e) => {
 
   const card = e.target.closest('.card');
   if (card && card.dataset.productId) {
-    window.location.href = `product.html?id=${card.dataset.productId}`;
+    window.location.href = `/product/${card.dataset.productId}`;
   }
 });

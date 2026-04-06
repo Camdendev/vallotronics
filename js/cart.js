@@ -4,7 +4,7 @@ async function renderCart() {
   if (!listEl || !summaryEl) return;
 
   try {
-    const res = await fetch('/api/cart');
+    const res = await fetch('/api/cart', { credentials: 'same-origin' });
     const cart = await res.json();
     if (!cart || !cart.length) {
       listEl.innerHTML = '<p class="muted">Cart is empty</p>';
@@ -39,11 +39,11 @@ async function renderCart() {
     const total = subtotal + tax + ship;
 
     // show checkout only if server says user is authenticated
-    let checkoutControl = `<div class="summary-primary muted" style="margin-top:40px;margin-bottom:18px;clear:both">Please <a href="login.html">log in</a> to checkout.</div>`;
+    let checkoutControl = `<div class="summary-primary muted" style="margin-top:40px;margin-bottom:18px;clear:both">Please <a href="/login.html">log in</a> to checkout.</div>`;
     try {
-      const me = await fetch('/api/me').then(r => r.json());
+      const me = await fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json());
       if (me) {
-        checkoutControl = `<div class="summary-primary" style="margin-top:30px;margin-bottom:18px;clear:both"><a href="checkout.html" class="btn">Proceed to checkout</a></div>`;
+        checkoutControl = `<div class="summary-primary" style="margin-top:30px;margin-bottom:18px;clear:both"><a href="/checkout.html" class="btn">Proceed to checkout</a></div>`;
       }
     } catch (e) {}
 
@@ -55,7 +55,7 @@ async function renderCart() {
       <hr>
       <div class="summary-line"><strong>Total</strong> <strong>$${total.toFixed(2)}</strong></div>
       ${checkoutControl}
-      <div class="summary-actions" style="margin-top:24px;clear:both"><a href="products.html" class="btn secondary">Continue shopping</a></div>
+      <div class="summary-actions" style="margin-top:24px;clear:both"><a href="/products.html" class="btn secondary">Continue shopping</a></div>
     `;
   } catch (e) {
     listEl.innerHTML = '<p class="muted">Failed to load cart.</p>';
@@ -69,7 +69,7 @@ document.addEventListener('click', (e) => {
   if (removeBtn) {
     const id = removeBtn.getAttribute('data-remove');
     if (id) {
-      fetch('/api/remove_from_cart', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id) }) })
+      fetch('/api/remove_from_cart', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id) }) })
         .then((res) => {
           if (res.status === 401) {
             alert('Please login to modify your cart');
@@ -90,7 +90,7 @@ document.addEventListener('change', (e) => {
     const id = input.getAttribute('data-id');
     const val = input.value;
     if (id && val) {
-      fetch('/api/update_cart', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id), quantity: Number(val) }) })
+      fetch('/api/update_cart', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id), quantity: Number(val) }) })
         .then((res) => {
           if (res.status === 401) { alert('Please login to update cart'); return; }
           if (!res.ok) { alert('Failed to update cart'); }

@@ -124,6 +124,7 @@ def checkout():
     if request.method == 'POST':
         # Create order
         try:
+            # create order and order_items first
             cur.execute(
                 "INSERT INTO orders (user_id, total_amount) VALUES (%s,%s) RETURNING order_id",
                 (user_id, total),
@@ -136,22 +137,45 @@ def checkout():
                 )
                 # reduce stock
                 cur.execute("UPDATE items SET stock_quantity = stock_quantity - %s WHERE item_id = %s", (ci['quantity'], ci['item_id']))
-            # Simple payment record
-            payment_method = request.form.get('payment_method', 'Card')
-            cur.execute("INSERT INTO payments (order_id, payment_method, amount) VALUES (%s,%s,%s)", (order_id, payment_method, total))
+
+            # commit order and items so they persist even if ancillary inserts fail
+            conn.commit()
+
+            # attempt to record payment and shipping; log failures but don't rollback the saved order
+            try:
+                payment_method = request.form.get('payment_method', 'Card')
+                cur.execute("INSERT INTO payments (order_id, payment_method, amount) VALUES (%s,%s,%s)", (order_id, payment_method, total))
+            except Exception as e:
+                print('Warning: payments insert failed:', e)
+
             # shipping info
+            name = request.form.get('fullname', '')
             address = request.form.get('address', '')
             city = request.form.get('city', '')
             state = request.form.get('state', '')
             postal = request.form.get('postal_code', '')
             country = request.form.get('country', '')
-            cur.execute(
-                "INSERT INTO shipping_info (order_id, address, city, state, postal_code, country) VALUES (%s,%s,%s,%s,%s,%s)",
-                (order_id, address, city, state, postal, country),
-            )
+            try:
+                cur.execute(
+                    "INSERT INTO shipping_info (order_id, name, address, city, state, postal_code, country) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                    (order_id, name, address, city, state, postal, country),
+                )
+            except Exception as e:
+                try:
+                    cur.execute(
+                        "INSERT INTO shipping_info (order_id, address, city, state, postal_code, country) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (order_id, address, city, state, postal, country),
+                    )
+                except Exception as e2:
+                    print('Warning: shipping_info insert failed:', e, e2)
+
             # clear cart
-            cur.execute("DELETE FROM cart_items WHERE cart_id = %s", (cart_id,))
-            conn.commit()
+            try:
+                cur.execute("DELETE FROM cart_items WHERE cart_id = %s", (cart_id,))
+                conn.commit()
+            except Exception as e:
+                print('Warning: clearing cart failed:', e)
+
             flash('Order placed')
             return redirect(url_for('order_confirmation', order_id=order_id))
         except Exception as e:
@@ -208,31 +232,33 @@ def render_static_page(page):
 def api_products():
     conn, cur = get_db_cursor()
     cur.execute(
-        "SELECT items.item_id, items.item_name, items.description, items.price, items.stock_quantity, categories.category_name FROM items LEFT JOIN categories ON items.category_id = categories.category_id ORDER BY item_id"
+        "SELECT items.* , categories.category_name FROM items LEFT JOIN categories ON items.category_id = categories.category_id ORDER BY item_id"
     )
     rows = cur.fetchall()
     cur.close()
     conn.close()
     items = []
     for r in rows:
-        items.append(
-            {
-                'id': r['item_id'],
-                'name': r['item_name'],
-                'desc': r['description'],
-                'price': float(r['price']),
-                'stock_quantity': r['stock_quantity'],
-                'category': r['category_name'],
-                'image': '',
-            }
-        )
+        it = {
+            'id': r['item_id'],
+            'name': r['item_name'],
+            'desc': r['description'],
+            'price': float(r['price']),
+            'stock_quantity': r['stock_quantity'],
+            'category': r['category_name'],
+            'image': ''
+        }
+        # include specs if available (JSON column)
+        if r.get('specs') is not None:
+            it['specs'] = r.get('specs')
+        items.append(it)
     return json_ok(items)
 
 
 @app.route('/api/products/<int:item_id>')
 def api_product(item_id):
     conn, cur = get_db_cursor()
-    cur.execute("SELECT items.item_id, items.item_name, items.description, items.price, items.stock_quantity, categories.category_name FROM items LEFT JOIN categories ON items.category_id = categories.category_id WHERE item_id = %s", (item_id,))
+    cur.execute("SELECT items.* , categories.category_name FROM items LEFT JOIN categories ON items.category_id = categories.category_id WHERE item_id = %s", (item_id,))
     r = cur.fetchone()
     cur.close()
     conn.close()
@@ -247,7 +273,121 @@ def api_product(item_id):
         'category': r['category_name'],
         'image': ''
     }
+    if r.get('specs') is not None:
+        item['specs'] = r.get('specs')
     return json_ok(item)
+
+
+@app.route('/api/reviews', methods=['GET'])
+def api_get_reviews():
+    item_id = request.args.get('item_id')
+    if not item_id:
+        return json_error('missing item_id', 400)
+    try:
+        iid = int(item_id)
+    except Exception:
+        return json_error('invalid item_id', 400)
+
+    conn, cur = get_db_cursor()
+    try:
+        # include reviewer username when available
+        cur.execute("SELECT r.review_id, r.item_id, r.user_id, r.rating, r.text, r.created_at, r.approved, u.username AS reviewer FROM reviews r LEFT JOIN users u ON r.user_id = u.user_id WHERE r.item_id = %s AND r.approved = TRUE ORDER BY r.created_at DESC", (iid,))
+        rows = cur.fetchall()
+        reviews = []
+        for r in rows:
+            reviews.append({'review_id': r['review_id'], 'item_id': r['item_id'], 'user_id': r.get('user_id'), 'username': r.get('reviewer'), 'rating': r['rating'], 'text': r.get('text'), 'created_at': r.get('created_at').isoformat() if r.get('created_at') else None})
+
+        # compute average
+        cur.execute("SELECT AVG(rating) as avg FROM reviews WHERE item_id = %s AND approved = TRUE", (iid,))
+        avg_row = cur.fetchone()
+        avg = float(avg_row['avg']) if avg_row and avg_row['avg'] is not None else 0.0
+        cur.close()
+        conn.close()
+        return json_ok({'reviews': reviews, 'avg': round(avg, 2)})
+    except Exception as e:
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
+
+
+@app.route('/api/reviews', methods=['POST'])
+def api_post_review():
+    data = request.get_json() or {}
+    item_id = data.get('item_id')
+    rating = data.get('rating')
+    text = data.get('text')
+
+    if item_id is None or rating is None:
+        return json_error('missing fields', 400)
+    try:
+        iid = int(item_id)
+        rating = int(rating)
+    except Exception:
+        return json_error('invalid fields', 400)
+    if rating < 1 or rating > 5:
+        return json_error('rating out of range', 400)
+
+    user_id = session.get('user_id') if 'user_id' in session else None
+
+    conn, cur = get_db_cursor()
+    try:
+        # ensure item exists
+        cur.execute("SELECT item_id FROM items WHERE item_id = %s", (iid,))
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return json_error('item not found', 404)
+
+        cur.execute("INSERT INTO reviews (item_id, user_id, rating, text, approved) VALUES (%s,%s,%s,%s,%s) RETURNING review_id, created_at",
+                    (iid, user_id, rating, text, True))
+        r = cur.fetchone()
+        conn.commit()
+        review_id = r['review_id']
+        created_at = r.get('created_at')
+        cur.close()
+        conn.close()
+        return json_ok({'review_id': review_id, 'created_at': created_at.isoformat() if created_at else None})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
+
+
+@app.route('/api/reviews/<int:review_id>', methods=['DELETE'])
+def api_delete_review(review_id):
+    if 'user_id' not in session:
+        return json_error('not authenticated', 401)
+    user_id = session['user_id']
+    conn, cur = get_db_cursor()
+    try:
+        cur.execute("SELECT user_id FROM reviews WHERE review_id = %s", (review_id,))
+        r = cur.fetchone()
+        if not r:
+            cur.close()
+            conn.close()
+            return json_error('not found', 404)
+
+        owner_id = r.get('user_id')
+        # allow owner or admin
+        cur.execute("SELECT role_id FROM users WHERE user_id = %s", (user_id,))
+        u = cur.fetchone()
+        role = u.get('role_id') if u else None
+        if owner_id != user_id and role != 1:
+            cur.close()
+            conn.close()
+            return json_error('forbidden', 403)
+
+        cur.execute("DELETE FROM reviews WHERE review_id = %s", (review_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return json_ok({'deleted': True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
 
 
 @app.route('/api/register', methods=['POST'])
@@ -357,6 +497,81 @@ def api_add_to_cart():
         conn.close()
 
 
+@app.route('/api/remove_from_cart', methods=['POST'])
+def api_remove_from_cart():
+    if 'user_id' not in session:
+        return json_error('not authenticated', 401)
+    data = request.get_json() or {}
+    item_id = data.get('item_id')
+    if not item_id:
+        return json_error('missing item_id', 400)
+    user_id = session['user_id']
+    conn, cur = get_db_cursor()
+    try:
+        cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
+        cart = cur.fetchone()
+        if not cart:
+            cur.close()
+            conn.close()
+            return json_ok({'removed': False})
+        cart_id = cart['cart_id']
+        cur.execute("DELETE FROM cart_items WHERE cart_id = %s AND item_id = %s", (cart_id, item_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return json_ok({'removed': True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
+
+
+@app.route('/api/update_cart', methods=['POST'])
+def api_update_cart():
+    if 'user_id' not in session:
+        return json_error('not authenticated', 401)
+    data = request.get_json() or {}
+    item_id = data.get('item_id')
+    quantity = data.get('quantity')
+    if item_id is None or quantity is None:
+        return json_error('missing item_id or quantity', 400)
+    try:
+        quantity = int(quantity)
+    except Exception:
+        return json_error('invalid quantity', 400)
+    user_id = session['user_id']
+    conn, cur = get_db_cursor()
+    try:
+        cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
+        cart = cur.fetchone()
+        if not cart:
+            # create cart if updating into empty
+            cart_id = get_or_create_cart(user_id)
+        else:
+            cart_id = cart['cart_id']
+
+        if quantity <= 0:
+            cur.execute("DELETE FROM cart_items WHERE cart_id = %s AND item_id = %s", (cart_id, item_id))
+        else:
+            cur.execute("SELECT quantity FROM cart_items WHERE cart_id = %s AND item_id = %s", (cart_id, item_id))
+            existing = cur.fetchone()
+            if existing:
+                cur.execute("UPDATE cart_items SET quantity = %s WHERE cart_id = %s AND item_id = %s", (quantity, cart_id, item_id))
+            else:
+                cur.execute("INSERT INTO cart_items (cart_id, item_id, quantity) VALUES (%s,%s,%s)", (cart_id, item_id, quantity))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        return json_ok({'updated': True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
+
+
 @app.route('/api/wishlist', methods=['GET'])
 def api_get_wishlist():
     if 'user_id' not in session:
@@ -461,6 +676,111 @@ def api_order_detail(order_id):
     cur.close()
     conn.close()
     return json_ok({'id': o['order_id'], 'total': float(o['total_amount']), 'items': [{'item_id': it['item_id'], 'quantity': it['quantity'], 'price': float(it['price']), 'name': it.get('item_name')} for it in items], 'shipping': ship})
+
+
+@app.route('/api/users', methods=['GET'])
+def api_users():
+    # return list of users for admin
+    if 'user_id' not in session:
+        return json_ok([])
+    user_id = session['user_id']
+    conn, cur = get_db_cursor()
+    try:
+        cur.execute("SELECT role_id FROM users WHERE user_id = %s", (user_id,))
+        u = cur.fetchone()
+        if not u or u.get('role_id') != 1:
+            cur.close()
+            conn.close()
+            return json_ok([])
+
+        cur.execute("SELECT user_id, username, email, first_name, last_name, created_at FROM users ORDER BY created_at DESC LIMIT 500")
+        rows = cur.fetchall()
+        out = []
+        for r in rows:
+            out.append({'user_id': r['user_id'], 'username': r.get('username'), 'email': r.get('email'), 'first_name': r.get('first_name'), 'last_name': r.get('last_name'), 'created_at': str(r.get('created_at'))})
+        cur.close()
+        conn.close()
+        return json_ok(out)
+    except Exception as e:
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
+
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+def api_delete_user(user_id):
+    # admin-only user deletion
+    if 'user_id' not in session:
+        return json_error('not authenticated', 401)
+    admin_id = session['user_id']
+    conn, cur = get_db_cursor()
+    try:
+        cur.execute("SELECT role_id FROM users WHERE user_id = %s", (admin_id,))
+        u = cur.fetchone()
+        if not u or u.get('role_id') != 1:
+            cur.close()
+            conn.close()
+            return json_error('forbidden', 403)
+
+        cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return json_ok({'deleted': True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
+
+
+@app.route('/api/orders/<int:order_id>', methods=['DELETE'])
+def api_delete_order(order_id):
+    if 'user_id' not in session:
+        return json_error('not authenticated', 401)
+    user_id = session['user_id']
+    conn, cur = get_db_cursor()
+    try:
+        cur.execute("SELECT user_id FROM orders WHERE order_id = %s", (order_id,))
+        o = cur.fetchone()
+        if not o:
+            cur.close()
+            conn.close()
+            return json_error('not found', 404)
+
+        owner_id = o.get('user_id')
+        # allow if owner or admin
+        cur.execute("SELECT role_id FROM users WHERE user_id = %s", (user_id,))
+        u = cur.fetchone()
+        role = u.get('role_id') if u else None
+        if owner_id != user_id and role != 1:
+            cur.close()
+            conn.close()
+            return json_error('forbidden', 403)
+
+        # delete related rows if they exist
+        try:
+            cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
+        except Exception:
+            pass
+        try:
+            cur.execute("DELETE FROM payments WHERE order_id = %s", (order_id,))
+        except Exception:
+            pass
+        try:
+            cur.execute("DELETE FROM shipping_info WHERE order_id = %s", (order_id,))
+        except Exception:
+            pass
+        cur.execute("DELETE FROM orders WHERE order_id = %s", (order_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return json_ok({'deleted': True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
 
 
 if __name__ == '__main__':

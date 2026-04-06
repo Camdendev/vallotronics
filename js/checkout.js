@@ -2,7 +2,7 @@ async function updateSummary() {
   const placeBtn = document.getElementById('placeOrderBtn');
   let cart = [];
   try {
-    const res = await fetch('/api/cart');
+    const res = await fetch('/api/cart', { credentials: 'same-origin' });
     if (res.ok) cart = await res.json();
   } catch (e) {
     cart = [];
@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     await updateSummary();
 
     (function autofillShippingName() {
-      fetch('/api/me').then(r => r.json()).then((user) => {
+      fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json()).then((user) => {
         if (!user) return;
 
         const raw = user.first_name || user.username || (user.email ? user.email.split('@')[0] : '');
@@ -85,6 +85,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Let the form submit normally to `/checkout` so server creates the order and redirects
     // (no client-side localStorage placeOrder usage)
+    // expiry input formatter: enforce MM/YY and insert slash
+    (function formatExpiry() {
+      const exp = document.getElementById('expiry');
+      if (!exp) return;
+      exp.addEventListener('input', (e) => {
+        let v = exp.value.replace(/[^0-9]/g, '').slice(0,4);
+        if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
+        exp.value = v;
+      });
+      exp.addEventListener('blur', () => {
+        const v = exp.value.split('/');
+        if (v.length === 2) {
+          let mm = v[0].padStart(2,'0');
+          let yy = v[1];
+          if (yy.length === 4) yy = yy.slice(2);
+          exp.value = mm + '/' + yy;
+        }
+      });
+    }());
   };
 
   if (window.fetchProducts) {

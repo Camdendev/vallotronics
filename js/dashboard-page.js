@@ -10,7 +10,7 @@ function capitalizeName(str) {
 }
 
 // Load user and orders from server
-fetch('/api/me').then(r => r.json()).then((u) => {
+fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json()).then((u) => {
   user = u;
   const rawDisplay = user && user.email ? user.email.split('@')[0] : (user && (user.first_name || user.username) ? (user.first_name || user.username) : '');
   const display = capitalizeName(rawDisplay);
@@ -36,11 +36,11 @@ fetch('/api/me').then(r => r.json()).then((u) => {
       adminEl.innerHTML = '';
     }
   } else {
-    profileEl.innerHTML = `<p class="muted">Not logged in — <a href="login.html">login</a></p>`;
+    profileEl.innerHTML = `<p class="muted">Not logged in — <a href="/login.html">login</a></p>`;
     adminEl.innerHTML = '';
   }
 
-  fetch('/api/orders').then(r => r.json()).then((orders) => {
+  fetch('/api/orders', { credentials: 'same-origin' }).then(r => r.json()).then((orders) => {
     const ordersHtml = (orders && orders.length) ? orders.map((o) => {
       let subtotal = 0;
       o.items.forEach((it) => {
@@ -65,8 +65,8 @@ fetch('/api/me').then(r => r.json()).then((u) => {
               <div class="muted" style="margin-top:8px">${o.shipping && o.shipping.address ? o.shipping.address + ', ' + (o.shipping.city || '') : ''}</div>
               <div style="margin-top:8px">${itemsHtml}</div>
               <div class="summary-line" style="margin-top:10px"><span>Total</span> <strong>$${total.toFixed(2)}</strong></div>
-              <div style="margin-top:8px;display:flex;gap:8px">
-                <a class="btn secondary" href="order-confirmation.html?id=${o.id}">View</a>
+                <div style="margin-top:8px;display:flex;gap:8px">
+                <a class="btn secondary" href="/order-confirmation/${o.id}">View</a>
               </div>
             </div>
           `;

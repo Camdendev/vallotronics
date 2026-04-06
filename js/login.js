@@ -20,6 +20,7 @@ document.getElementById('cancelRegister').addEventListener('click', (e) => {
     fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify({ username: email, password })
     }).then(async (res) => {
       if (!res.ok) {
@@ -28,7 +29,7 @@ document.getElementById('cancelRegister').addEventListener('click', (e) => {
         return;
       }
       // server sets session; redirect and let header fetch /api/me
-      location.href = 'dashboard.html';
+      location.href = '/dashboard.html';
     }).catch((e) => {
       console.error(e);
       alert('Login failed');

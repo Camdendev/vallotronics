@@ -246,7 +246,7 @@ def api_products():
             'price': float(r['price']),
             'stock_quantity': r['stock_quantity'],
             'category': r['category_name'],
-            'image': ''
+            'image': r.get('image_url') or ''
         }
         # include specs if available (JSON column)
         if r.get('specs') is not None:
@@ -271,7 +271,7 @@ def api_product(item_id):
         'price': float(r['price']),
         'stock_quantity': r['stock_quantity'],
         'category': r['category_name'],
-        'image': ''
+        'image': r.get('image_url') or ''
     }
     if r.get('specs') is not None:
         item['specs'] = r.get('specs')

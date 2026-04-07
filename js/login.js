@@ -28,8 +28,18 @@ document.getElementById('cancelRegister').addEventListener('click', (e) => {
         alert(err.error || 'Login failed');
         return;
       }
-      // server sets session; redirect and let header fetch /api/me
-      location.href = '/dashboard.html';
+        // server sets session; sync any local cart to server then redirect
+        try {
+          const local = (window.app && typeof window.app.getCart === 'function') ? window.app.getCart() : JSON.parse(localStorage.getItem('local_cart') || '[]');
+          if (Array.isArray(local) && local.length) {
+            await Promise.all(local.map((it) => fetch('/api/add_to_cart', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(it.id), quantity: Number(it.qty) }) })));
+            if (window.app && typeof window.app.clearLocalCart === 'function') window.app.clearLocalCart(); else localStorage.removeItem('local_cart');
+          }
+        } catch (e) {
+          console.warn('Failed to sync local cart on login', e);
+        }
+
+        location.href = '/dashboard.html';
     }).catch((e) => {
       console.error(e);
       alert('Login failed');

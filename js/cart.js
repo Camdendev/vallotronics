@@ -5,11 +5,17 @@ async function renderCart() {
 
   try {
     const res = await fetch('/api/cart', { credentials: 'same-origin' });
-    const cart = await res.json();
+    let cart = await res.json();
+    let usedLocal = false;
     if (!cart || !cart.length) {
-      listEl.innerHTML = '<p class="muted">Cart is empty</p>';
-      summaryEl.innerHTML = '';
-      return;
+      const local = (window.app && typeof window.app.getCart === 'function') ? window.app.getCart() : (JSON.parse(localStorage.getItem('local_cart') || '[]'));
+      if (!local || !local.length) {
+        listEl.innerHTML = '<p class="muted">Cart is empty</p>';
+        summaryEl.innerHTML = '';
+        return;
+      }
+      cart = local;
+      usedLocal = true;
     }
 
     listEl.innerHTML = cart
@@ -38,14 +44,16 @@ async function renderCart() {
     const ship = 4.99;
     const total = subtotal + tax + ship;
 
-    // show checkout only if server says user is authenticated
+    // show checkout only if server says user is authenticated; if using local cart, require login
     let checkoutControl = `<div class="summary-primary muted" style="margin-top:40px;margin-bottom:18px;clear:both">Please <a href="/login.html">log in</a> to checkout.</div>`;
-    try {
-      const me = await fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json());
-      if (me) {
-        checkoutControl = `<div class="summary-primary" style="margin-top:30px;margin-bottom:18px;clear:both"><a href="/checkout.html" class="btn">Proceed to checkout</a></div>`;
-      }
-    } catch (e) {}
+    if (!usedLocal) {
+      try {
+        const me = await fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json());
+        if (me) {
+          checkoutControl = `<div class="summary-primary" style="margin-top:30px;margin-bottom:18px;clear:both"><a href="/checkout.html" class="btn">Proceed to checkout</a></div>`;
+        }
+      } catch (e) {}
+    }
 
     summaryEl.innerHTML = `
       <h3>Order Summary</h3>
@@ -72,6 +80,19 @@ document.addEventListener('click', (e) => {
       fetch('/api/remove_from_cart', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id) }) })
         .then((res) => {
           if (res.status === 401) {
+            // unauthenticated: remove from local cart instead
+            if (window.app && typeof window.app.removeFromCart === 'function') {
+              window.app.removeFromCart(Number(id));
+              renderCart();
+              return;
+            }
+            try {
+              const local = JSON.parse(localStorage.getItem('local_cart') || '[]');
+              const updated = local.filter(i => i.id !== Number(id));
+              localStorage.setItem('local_cart', JSON.stringify(updated));
+              renderCart();
+              return;
+            } catch (e) { console.warn('local remove failed', e); }
             alert('Please login to modify your cart');
             return;
           }
@@ -92,7 +113,24 @@ document.addEventListener('change', (e) => {
     if (id && val) {
       fetch('/api/update_cart', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(id), quantity: Number(val) }) })
         .then((res) => {
-          if (res.status === 401) { alert('Please login to update cart'); return; }
+          if (res.status === 401) {
+            // unauthenticated: update local cart
+            if (window.app && typeof window.app.updateQty === 'function') {
+              window.app.updateQty(Number(id), Number(val));
+              renderCart();
+              return;
+            }
+            try {
+              const local = JSON.parse(localStorage.getItem('local_cart') || '[]');
+              const it = local.find(x => x.id === Number(id));
+              if (it) it.qty = Number(val);
+              localStorage.setItem('local_cart', JSON.stringify(local));
+              renderCart();
+              return;
+            } catch (e) { console.warn('local update failed', e); }
+            alert('Please login to update cart');
+            return;
+          }
           if (!res.ok) { alert('Failed to update cart'); }
           renderCart();
         }).catch(() => { alert('Cart update failed'); });

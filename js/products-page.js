@@ -15,8 +15,9 @@ function render(list) {
       </div>
       <p class="muted">${p.desc}</p>
       
-      <p>
+      <p style="display:flex;gap:8px;align-items:center">
         <button class="btn" data-id="${p.id}">Add to Cart</button>
+        <button class="btn secondary" data-wishlist="${p.id}">Add to Wishlist</button>
       </p>
     `;
 
@@ -29,6 +30,19 @@ fetchProducts().then(() => {
 });
 
 document.getElementById('list').addEventListener('click', (e) => {
+  const wishlistId = e.target.dataset.wishlist;
+  if (wishlistId) {
+    if (window.wishlist && typeof window.wishlist.add === 'function') {
+      window.wishlist.add(Number(wishlistId)).then(() => {
+        e.target.textContent = 'Added';
+        e.target.disabled = true;
+      }).catch(() => { /* wishlist handles errors */ });
+      return;
+    }
+    alert('Please login to add to wishlist');
+    return;
+  }
+
   if (e.target.dataset.id) return app.addToCart(e.target.dataset.id);
 
   const card = e.target.closest('.card');

@@ -8,12 +8,25 @@ function $all(s, root = document) {
 
 // Client no longer uses localStorage for cart; use server APIs instead.
 function getCart() {
-  console.warn('getCart(): client should call /api/cart directly');
-  return [];
+  try {
+    const raw = localStorage.getItem('local_cart');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.error('getCart parse failed', e);
+    return [];
+  }
 }
 
 function saveCart(c) {
-  console.warn('saveCart(): localStorage disabled; use server APIs');
+  try {
+    localStorage.setItem('local_cart', JSON.stringify(c || []));
+  } catch (e) {
+    console.error('saveCart failed', e);
+  }
+}
+
+function clearLocalCart() {
+  try { localStorage.removeItem('local_cart'); } catch (e) { console.error('clearLocalCart failed', e); }
 }
 
 function addToCart(id, qty = 1) {
@@ -171,6 +184,8 @@ window.app = {
   addToCart,
   removeFromCart,
   updateQty,
+  getCart,
+  clearLocalCart,
   findProduct: window.findProduct,
   searchProducts: window.searchProducts,
   averageRating,

@@ -23,7 +23,7 @@ fetchProduct(id).then((p) => {
         
         <p class="muted">${p.desc}</p>
 
-        <div style="margin-top:12px">
+        <div style="margin-top:12px;display:flex;gap:12px;align-items:center">
           <button id="add" class="btn">Add to Cart</button>
           <div id="wishlistControl"></div>
         </div>

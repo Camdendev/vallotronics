@@ -20,7 +20,7 @@ fetch(`/api/orders/${id}`, { credentials: 'same-origin' }).then(async (res) => {
   const total = subtotal + tax + ship;
   el.innerHTML = `
     <div class="card">
-      <h3>Order #${o.id}</h3>
+      <h3>Order #${o.order_number || o.id}</h3>
       <p class="muted">Thank you! Your order has been received and is being processed.</p>
 
       <h4 style="margin-top:12px">Items</h4>

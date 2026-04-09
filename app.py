@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
+import secrets
 import psycopg2.extras
 import config
 import db
@@ -124,12 +125,32 @@ def checkout():
     if request.method == 'POST':
         # Create order
         try:
+            # ensure an `order_number` column exists to store a display-friendly random number
+            try:
+                cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_number VARCHAR(32)")
+            except Exception:
+                # non-fatal; if altering fails we'll still attempt to insert without the column
+                pass
             # create order and order_items first
-            cur.execute(
-                "INSERT INTO orders (user_id, total_amount) VALUES (%s,%s) RETURNING order_id",
-                (user_id, total),
-            )
-            order_id = cur.fetchone()['order_id']
+            # generate a random 16-digit order number for display
+            order_number = ''.join(secrets.choice('0123456789') for _ in range(16))
+            try:
+                cur.execute(
+                    "INSERT INTO orders (user_id, total_amount, order_number) VALUES (%s,%s,%s) RETURNING order_id, order_number",
+                    (user_id, total, order_number),
+                )
+                row = cur.fetchone()
+                order_id = row['order_id']
+                # keep the stored order_number (may be useful later)
+                stored_order_number = row.get('order_number')
+            except Exception:
+                # fallback if DB doesn't support the order_number column
+                cur.execute(
+                    "INSERT INTO orders (user_id, total_amount) VALUES (%s,%s) RETURNING order_id",
+                    (user_id, total),
+                )
+                order_id = cur.fetchone()['order_id']
+                stored_order_number = None
             for ci in cart_items:
                 cur.execute(
                     "INSERT INTO order_items (order_id, item_id, quantity, price) VALUES (%s,%s,%s,%s)",
@@ -169,9 +190,15 @@ def checkout():
                 except Exception as e2:
                     print('Warning: shipping_info insert failed:', e, e2)
 
-            # clear cart
+            # clear cart items and remove cart row so user's cart is emptied
             try:
                 cur.execute("DELETE FROM cart_items WHERE cart_id = %s", (cart_id,))
+                # also remove the cart row itself to match typical retail behaviour
+                try:
+                    cur.execute("DELETE FROM carts WHERE cart_id = %s", (cart_id,))
+                except Exception:
+                    # non-fatal if carts row cannot be removed for any reason
+                    pass
                 conn.commit()
             except Exception as e:
                 print('Warning: clearing cart failed:', e)
@@ -209,7 +236,7 @@ def admin_dashboard():
     conn, cur = get_db_cursor()
     cur.execute("SELECT * FROM orders ORDER BY order_date DESC LIMIT 50")
     orders = cur.fetchall()
-    cur.execute("SELECT user_id, username, email, created_at FROM users ORDER BY created_at DESC LIMIT 50")
+    cur.execute("SELECT user_id, email, first_name, last_name, role_id, created_at FROM users ORDER BY created_at DESC LIMIT 50")
     users = cur.fetchall()
     cur.close()
     conn.close()
@@ -278,6 +305,124 @@ def api_product(item_id):
     return json_ok(item)
 
 
+@app.route('/api/products', methods=['POST'])
+def api_create_product():
+    if 'user_id' not in session:
+        return json_error('not authenticated', 401)
+    admin_id = session['user_id']
+    conn, cur = get_db_cursor()
+    try:
+        cur.execute("SELECT role_id FROM users WHERE user_id = %s", (admin_id,))
+        u = cur.fetchone()
+        if not u or u.get('role_id') != 1:
+            cur.close()
+            conn.close()
+            return json_error('forbidden', 403)
+
+        data = request.get_json() or {}
+        name = data.get('name')
+        desc = data.get('desc')
+        price = data.get('price')
+        stock = data.get('stock_quantity') or 0
+        category_id = data.get('category_id')
+        image = data.get('image')
+        specs = data.get('specs')
+
+        if not name or price is None:
+            cur.close()
+            conn.close()
+            return json_error('missing fields', 400)
+
+        cur.execute("INSERT INTO items (item_name, description, price, stock_quantity, category_id, image_url, specs) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING item_id",
+                    (name, desc, price, stock, category_id, image, specs))
+        iid = cur.fetchone()['item_id']
+        conn.commit()
+        cur.close()
+        conn.close()
+        return json_ok({'item_id': iid})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
+
+
+@app.route('/api/products/<int:item_id>', methods=['PUT'])
+def api_update_product(item_id):
+    if 'user_id' not in session:
+        return json_error('not authenticated', 401)
+    admin_id = session['user_id']
+    conn, cur = get_db_cursor()
+    try:
+        cur.execute("SELECT role_id FROM users WHERE user_id = %s", (admin_id,))
+        u = cur.fetchone()
+        if not u or u.get('role_id') != 1:
+            cur.close()
+            conn.close()
+            return json_error('forbidden', 403)
+
+        data = request.get_json() or {}
+        fields = []
+        vals = []
+        mapping = {
+            'name': 'item_name',
+            'desc': 'description',
+            'price': 'price',
+            'stock_quantity': 'stock_quantity',
+            'category_id': 'category_id',
+            'image': 'image_url',
+            'specs': 'specs'
+        }
+        for k, col in mapping.items():
+            if k in data:
+                fields.append(f"{col} = %s")
+                vals.append(data.get(k))
+
+        if not fields:
+            cur.close()
+            conn.close()
+            return json_error('no fields to update', 400)
+
+        vals.append(item_id)
+        sql = f"UPDATE items SET {', '.join(fields)} WHERE item_id = %s"
+        cur.execute(sql, tuple(vals))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return json_ok({'updated': True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
+
+
+@app.route('/api/products/<int:item_id>', methods=['DELETE'])
+def api_delete_product(item_id):
+    if 'user_id' not in session:
+        return json_error('not authenticated', 401)
+    admin_id = session['user_id']
+    conn, cur = get_db_cursor()
+    try:
+        cur.execute("SELECT role_id FROM users WHERE user_id = %s", (admin_id,))
+        u = cur.fetchone()
+        if not u or u.get('role_id') != 1:
+            cur.close()
+            conn.close()
+            return json_error('forbidden', 403)
+
+        cur.execute("DELETE FROM items WHERE item_id = %s", (item_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return json_ok({'deleted': True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
+
+
 @app.route('/api/reviews', methods=['GET'])
 def api_get_reviews():
     item_id = request.args.get('item_id')
@@ -290,8 +435,11 @@ def api_get_reviews():
 
     conn, cur = get_db_cursor()
     try:
-        # include reviewer username when available
-        cur.execute("SELECT r.review_id, r.item_id, r.user_id, r.rating, r.text, r.created_at, r.approved, u.username AS reviewer FROM reviews r LEFT JOIN users u ON r.user_id = u.user_id WHERE r.item_id = %s AND r.approved = TRUE ORDER BY r.created_at DESC", (iid,))
+        # include reviewer name or email when available
+        cur.execute(
+            "SELECT r.review_id, r.item_id, r.user_id, r.rating, r.text, r.created_at, r.approved, CASE WHEN (u.first_name IS NOT NULL OR u.last_name IS NOT NULL) THEN COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'') ELSE u.email END AS reviewer FROM reviews r LEFT JOIN users u ON r.user_id = u.user_id WHERE r.item_id = %s AND r.approved = TRUE ORDER BY r.created_at DESC",
+            (iid,)
+        )
         rows = cur.fetchall()
         reviews = []
         for r in rows:
@@ -393,22 +541,28 @@ def api_delete_review(review_id):
 @app.route('/api/register', methods=['POST'])
 def api_register():
     data = request.get_json() or {}
-    username = data.get('username') or data.get('email')
     email = data.get('email')
     password = data.get('password')
     first = data.get('first_name')
     last = data.get('last_name')
-    if not username or not email or not password:
+    if not email or not password:
         return json_error('missing fields', 400)
     password_hash = generate_password_hash(password)
     conn, cur = get_db_cursor()
     try:
-        cur.execute("INSERT INTO users (role_id, username, email, password_hash, first_name, last_name) VALUES (%s,%s,%s,%s,%s,%s) RETURNING user_id, username, email",
-                    (2, username, email, password_hash, first, last))
+        # ensure email not already registered
+        cur.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return json_error('email already registered', 409)
+
+        cur.execute("INSERT INTO users (role_id, email, password_hash, first_name, last_name) VALUES (%s,%s,%s,%s,%s) RETURNING user_id, email, first_name, last_name",
+                    (2, email, password_hash, first, last))
         u = cur.fetchone()
         conn.commit()
         session['user_id'] = u['user_id']
-        return json_ok({'user_id': u['user_id'], 'username': u['username'], 'email': u['email']})
+        return json_ok({'user_id': u['user_id'], 'email': u['email'], 'first_name': u.get('first_name'), 'last_name': u.get('last_name')})
     except Exception as e:
         conn.rollback()
         return json_error(str(e), 400)
@@ -420,18 +574,22 @@ def api_register():
 @app.route('/api/login', methods=['POST'])
 def api_login():
     data = request.get_json() or {}
-    username = data.get('username') or data.get('email')
+    identifier = data.get('email') or data.get('username')
     password = data.get('password')
-    if not username or not password:
+    if not identifier or not password:
         return json_error('missing fields', 400)
     conn, cur = get_db_cursor()
-    cur.execute("SELECT * FROM users WHERE username = %s OR email = %s", (username, username))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
+    try:
+        # authenticate by email (accept legacy 'username' field as input but match against email)
+        cur.execute("SELECT * FROM users WHERE email = %s", (identifier,))
+        user = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+
     if user and check_password_hash(user['password_hash'], password):
         session['user_id'] = user['user_id']
-        return json_ok({'user_id': user['user_id'], 'username': user['username'], 'email': user['email']})
+        return json_ok({'user_id': user['user_id'], 'email': user['email'], 'first_name': user.get('first_name'), 'last_name': user.get('last_name')})
     return json_error('invalid credentials', 401)
 
 
@@ -441,13 +599,13 @@ def api_me():
         return json_ok(None)
     user_id = session['user_id']
     conn, cur = get_db_cursor()
-    cur.execute("SELECT user_id, username, email, first_name, last_name, role_id FROM users WHERE user_id = %s", (user_id,))
+    cur.execute("SELECT user_id, email, first_name, last_name, role_id FROM users WHERE user_id = %s", (user_id,))
     u = cur.fetchone()
     cur.close()
     conn.close()
     if not u:
         return json_ok(None)
-    return json_ok({'user_id': u['user_id'], 'username': u['username'], 'email': u['email'], 'first_name': u.get('first_name'), 'last_name': u.get('last_name'), 'role_id': u.get('role_id')})
+    return json_ok({'user_id': u['user_id'], 'email': u['email'], 'first_name': u.get('first_name'), 'last_name': u.get('last_name'), 'role_id': u.get('role_id')})
 
 
 @app.route('/api/cart', methods=['GET'])
@@ -648,6 +806,7 @@ def api_orders():
         ship = cur.fetchone()
         out.append({
             'id': o['order_id'],
+            'order_number': o.get('order_number'),
             'total': float(o['total_amount']),
             'items': [{'item_id': it['item_id'], 'quantity': it['quantity'], 'price': float(it['price']), 'name': it.get('item_name')} for it in items],
             'shipping': ship
@@ -675,7 +834,7 @@ def api_order_detail(order_id):
     ship = cur.fetchone()
     cur.close()
     conn.close()
-    return json_ok({'id': o['order_id'], 'total': float(o['total_amount']), 'items': [{'item_id': it['item_id'], 'quantity': it['quantity'], 'price': float(it['price']), 'name': it.get('item_name')} for it in items], 'shipping': ship})
+    return json_ok({'id': o['order_id'], 'order_number': o.get('order_number'), 'total': float(o['total_amount']), 'items': [{'item_id': it['item_id'], 'quantity': it['quantity'], 'price': float(it['price']), 'name': it.get('item_name')} for it in items], 'shipping': ship})
 
 
 @app.route('/api/users', methods=['GET'])
@@ -693,11 +852,11 @@ def api_users():
             conn.close()
             return json_ok([])
 
-        cur.execute("SELECT user_id, username, email, first_name, last_name, created_at FROM users ORDER BY created_at DESC LIMIT 500")
+        cur.execute("SELECT user_id, email, first_name, last_name, role_id, created_at FROM users ORDER BY created_at DESC LIMIT 500")
         rows = cur.fetchall()
         out = []
         for r in rows:
-            out.append({'user_id': r['user_id'], 'username': r.get('username'), 'email': r.get('email'), 'first_name': r.get('first_name'), 'last_name': r.get('last_name'), 'created_at': str(r.get('created_at'))})
+            out.append({'user_id': r['user_id'], 'email': r.get('email'), 'first_name': r.get('first_name'), 'last_name': r.get('last_name'), 'role_id': r.get('role_id'), 'created_at': str(r.get('created_at'))})
         cur.close()
         conn.close()
         return json_ok(out)
@@ -727,6 +886,60 @@ def api_delete_user(user_id):
         cur.close()
         conn.close()
         return json_ok({'deleted': True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return json_error(str(e), 400)
+
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+def api_update_user(user_id):
+    if 'user_id' not in session:
+        return json_error('not authenticated', 401)
+    admin_id = session['user_id']
+    conn, cur = get_db_cursor()
+    try:
+        cur.execute("SELECT role_id FROM users WHERE user_id = %s", (admin_id,))
+        u = cur.fetchone()
+        if not u or u.get('role_id') != 1:
+            cur.close()
+            conn.close()
+            return json_error('forbidden', 403)
+
+        data = request.get_json() or {}
+        fields = []
+        vals = []
+        mapping = {
+            'email': 'email',
+            'email': 'email',
+            'first_name': 'first_name',
+            'last_name': 'last_name',
+            'role_id': 'role_id'
+        }
+        for k, col in mapping.items():
+            if k in data:
+                fields.append(f"{col} = %s")
+                vals.append(data.get(k))
+
+        # password special handling
+        if 'password' in data and data.get('password'):
+            pw = generate_password_hash(data.get('password'))
+            fields.append('password = %s')
+            vals.append(pw)
+
+        if not fields:
+            cur.close()
+            conn.close()
+            return json_error('no fields to update', 400)
+
+        vals.append(user_id)
+        sql = f"UPDATE users SET {', '.join(fields)} WHERE user_id = %s"
+        cur.execute(sql, tuple(vals))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return json_ok({'updated': True})
     except Exception as e:
         conn.rollback()
         cur.close()

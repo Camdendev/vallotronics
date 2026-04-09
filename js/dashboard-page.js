@@ -12,7 +12,7 @@ function capitalizeName(str) {
 // Load user and orders from server
 fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json()).then((u) => {
   user = u;
-  const rawDisplay = user && user.email ? user.email.split('@')[0] : (user && (user.first_name || user.username) ? (user.first_name || user.username) : '');
+  const rawDisplay = user && user.email ? user.email.split('@')[0] : (user && user.first_name ? user.first_name : '');
   const display = capitalizeName(rawDisplay);
   if (g) g.textContent = user ? `Hi, ${display}` : 'Your Dashboard';
 
@@ -56,10 +56,13 @@ fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json()).then((u) =>
         return `<div class="muted">${p.name} x${it.quantity} — <strong>$${(p.price * it.quantity).toFixed(2)}</strong></div>`;
       }).join('');
 
+      const orderRef = o.order_number ? ('#' + o.order_number) : `#${o.id}`;
       return `
             <div class="card" style="padding:12px;margin-bottom:10px">
               <div style="display:flex;justify-content:space-between;align-items:center">
-                <strong>Order ${o.id}</strong>
+                <div>
+                  <div><strong>Order</strong><strong style="margin-left:8px;font-size:0.95rem">${orderRef}</strong></div>
+                </div>
                 <div class="muted">${o.items.length} items</div>
               </div>
               <div class="muted" style="margin-top:8px">${o.shipping && o.shipping.address ? o.shipping.address + ', ' + (o.shipping.city || '') : ''}</div>

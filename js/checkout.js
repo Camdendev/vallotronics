@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
       fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json()).then((user) => {
         if (!user) return;
 
-        const raw = user.first_name || user.username || (user.email ? user.email.split('@')[0] : '');
+        const raw = user.first_name || (user.email ? user.email.split('@')[0] : '');
         if (!raw) return;
 
         function capitalizeName(str) {

@@ -1,7 +1,6 @@
 import psycopg2
 import config
 
-
 def get_conn():
     # Ensure connections use the desired schema as search_path
     opts = None
